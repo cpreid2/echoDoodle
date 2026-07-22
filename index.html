@@ -77,6 +77,34 @@
       z-index: 3; pointer-events: none; display: none;
     }
 
+    /* Floating Done/Cancel control shown while drawing a pen path */
+    #pen-actions {
+      position: fixed; z-index: 40;
+      left: 50%; top: 54px; transform: translateX(-50%);
+      display: none; gap: 8px;
+      padding: 6px; border-radius: 10px;
+      background: var(--plastic-raised, #1b1c20);
+      border: 2px solid; border-color: var(--bevel-raised, #3a3a40 #0a0a0c #0a0a0c #3a3a40);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+    }
+    #pen-actions button {
+      font-family: var(--font-mono, monospace); font-weight: 700; font-size: 13px;
+      text-transform: uppercase; letter-spacing: 1px;
+      padding: 9px 18px; min-width: 84px; border-radius: 7px; cursor: pointer;
+      border: 2px solid; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    #pen-done {
+      color: #04140a; background: var(--led-on, #24d14a);
+      border-color: #6cffa0 #0a5a24 #0a5a24 #6cffa0;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+    }
+    #pen-done:active { background: #1ba33a; }
+    #pen-cancel {
+      color: var(--ink, #e7e7ea); background: var(--plastic-btn, #26272c);
+      border-color: #45464c #101014 #101014 #45464c;
+    }
+    #pen-cancel:active { background: #333; }
+
     /* Brush preview ring that follows the cursor before drawing */
     #brush-preview {
       position: fixed; left: 0; top: 0; z-index: 5;
@@ -521,6 +549,12 @@
   <canvas id="glcanvas"></canvas>
   <canvas id="pen-overlay"></canvas>
   <div id="brush-preview"></div>
+
+  <!-- Floating Done/Cancel for the pen tool (touch-friendly finish/exit) -->
+  <div id="pen-actions">
+    <button id="pen-done" type="button">Done</button>
+    <button id="pen-cancel" type="button">Cancel</button>
+  </div>
 
   <!-- Persistent top menu bar -->
   <div id="menu-bar">
@@ -1751,24 +1785,17 @@
     let penEditBackup = null;   // original of a committed path being re-edited (for cancel)
     const PEN_HIT = 12;
 
-    // Long-press to finish a path (touch / Apple Pencil friendly, since double-tap
-    // is unreliable with a stylus). Hold still for PEN_LONGPRESS_MS to commit.
-    const PEN_LONGPRESS_MS = 500;
-    const PEN_LONGPRESS_MOVE = 12; // px of movement that cancels the hold
-    let penLongPressTimer = null;
-    let penPressPos = null;
-    let penLastPointerType = 'mouse';
-    function cancelPenLongPress() {
-      if (penLongPressTimer) { clearTimeout(penLongPressTimer); penLongPressTimer = null; }
-      penPressPos = null;
-    }
-    function schedulePenLongPress(x, y) {
-      cancelPenLongPress();
-      penPressPos = { x, y };
-      penLongPressTimer = setTimeout(() => {
-        penLongPressTimer = null; penPressPos = null;
-        if (penMode && !penEditing && penAnchors.length >= 2) commitPenPath();
-      }, PEN_LONGPRESS_MS);
+    // Floating Done/Cancel control shown while a pen path is in progress. This is
+    // the reliable, touch-friendly way to finish on iPad/Apple Pencil (double-tap
+    // is flaky with a stylus, and there's no keyboard for Enter).
+    const penActions = document.getElementById('pen-actions');
+    const penDoneBtn = document.getElementById('pen-done');
+    const penCancelBtn = document.getElementById('pen-cancel');
+    function updatePenActions() {
+      // Show while a pen/edit path is in progress so there's always a reliable,
+      // tappable way to finish (Done) or bail (Cancel) — vital on iPad.
+      const active = penMode && penAnchors.length >= 1;
+      penActions.style.display = active ? 'flex' : 'none';
     }
 
     // Catmull-Rom point blended toward the straight line by smoothness s (0..1).
@@ -1822,6 +1849,7 @@
     function drawPenOverlay() {
       const ctx = penCtx;
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      updatePenActions(); // show/hide the floating Done/Cancel control
       if (!penMode) return;
       const col = (penEditSettings && penEditSettings.color) || colorPicker.value;
       const size = Math.max(2, (penEditSettings && penEditSettings.size) || parseFloat(sizeSlider.value));
@@ -1910,25 +1938,6 @@
         ctx.beginPath(); ctx.arc(penHoverPos.x, penHoverPos.y, size / 2, 0, Math.PI * 2);
         ctx.strokeStyle = col; ctx.lineWidth = 1.25; ctx.stroke();
       }
-
-      // Hint so touch / Apple Pencil users know how to finish the path.
-      if (!penEditing && penAnchors.length >= 2) {
-        const last = penAnchors[penAnchors.length - 1];
-        const label = penLastPointerType === 'mouse' ? 'Double-click to finish' : 'Hold to finish';
-        ctx.font = '600 12px system-ui, -apple-system, sans-serif';
-        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-        const tw = ctx.measureText(label).width;
-        let lx = last.x + 14, ly = last.y - 14;
-        if (lx + tw + 12 > window.innerWidth) lx = last.x - tw - 26;
-        if (ly < 12) ly = last.y + 22;
-        ctx.fillStyle = 'rgba(0,0,0,0.62)';
-        ctx.beginPath();
-        (ctx.roundRect ? ctx.roundRect(lx - 7, ly - 10, tw + 14, 20, 5)
-                       : ctx.rect(lx - 7, ly - 10, tw + 14, 20));
-        ctx.fill();
-        ctx.fillStyle = '#00ff41';
-        ctx.fillText(label, lx, ly);
-      }
     }
 
     // Nearest anchor within the ACTIVE path.
@@ -2008,8 +2017,6 @@
 
     function penPointerDown(e) {
       if (e.button === 2) return; // removal is handled by contextmenu
-      penLastPointerType = e.pointerType || penLastPointerType;
-      cancelPenLongPress();
       const x = e.clientX, y = e.clientY;
 
       // Grab an anchor on the ACTIVE path (drag it; or close it in pen mode).
@@ -2052,27 +2059,17 @@
           };
         }
         penAnchors.push({ x, y });
-        // Stylus/touch: hold still after placing a point to finish the path.
-        if (e.pointerType !== 'mouse') schedulePenLongPress(x, y);
         drawPenOverlay();
       }
     }
 
     function penPointerMove(e) {
-      penLastPointerType = e.pointerType || penLastPointerType;
       penHoverPos = { x: e.clientX, y: e.clientY };
-      if (penDragIndex >= 0) {
-        penAnchors[penDragIndex] = { x: e.clientX, y: e.clientY };
-        cancelPenLongPress(); // dragging an anchor isn't a hold-to-finish
-      } else if (penPressPos &&
-                 Math.hypot(e.clientX - penPressPos.x, e.clientY - penPressPos.y) > PEN_LONGPRESS_MOVE) {
-        cancelPenLongPress(); // moved too far — treat as drawing, not a hold
-      }
+      if (penDragIndex >= 0) penAnchors[penDragIndex] = { x: e.clientX, y: e.clientY };
       drawPenOverlay();
     }
 
     function penPointerUp(e) {
-      cancelPenLongPress(); // lifting early = a normal tap, not a hold-to-finish
       if (penDragIndex >= 0) {
         penDragIndex = -1;
         try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
@@ -2163,6 +2160,10 @@
     }
 
     toolTabBtns.forEach(b => b.addEventListener('click', () => setPenTool(b.dataset.tool)));
+
+    // Floating Done/Cancel control (the reliable finish/exit path on touch).
+    penDoneBtn.addEventListener('click', (e) => { e.preventDefault(); commitPenPath(); });
+    penCancelBtn.addEventListener('click', (e) => { e.preventDefault(); clearPen(); });
 
     penSmoothSlider.addEventListener('input', () => {
       penSmoothness = parseInt(penSmoothSlider.value, 10) / 100;
