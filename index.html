@@ -64,6 +64,26 @@
       z-index: 0;
     }
 
+    /* Splash / load screen */
+    #splash {
+      position: fixed; inset: 0; z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+      background: #000; cursor: pointer;
+      transition: opacity 0.5s ease;
+    }
+    #splash.hide { opacity: 0; pointer-events: none; }
+    #splash video {
+      max-width: 100%; max-height: 100%; width: auto; height: auto; display: block;
+    }
+    #splash .splash-hint {
+      position: absolute; left: 0; right: 0; bottom: 7%; text-align: center;
+      color: var(--ink-muted); font-family: var(--font-mono);
+      font-size: 13px; letter-spacing: 3px; text-transform: uppercase;
+      pointer-events: none; animation: splashPulse 1.8s ease-in-out infinite;
+      text-shadow: 0 0 8px rgba(0,0,0,0.8);
+    }
+    @keyframes splashPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.95; } }
+
     #glcanvas {
       width: 100%; height: 100%; display: block; position: absolute; top: 0; left: 0;
       z-index: 1; background: transparent;
@@ -549,6 +569,33 @@
   </style>
 </head>
 <body>
+
+  <!-- Splash screen: looping echoDoodle drawing; click anywhere to enter -->
+  <div id="splash">
+    <video id="splash-video" src="splash.mp4" autoplay loop muted playsinline></video>
+    <div class="splash-hint">Click anywhere to begin</div>
+  </div>
+  <script>
+    (function () {
+      const splash = document.getElementById('splash');
+      const vid = document.getElementById('splash-video');
+      if (vid) { vid.play().catch(function () {}); } // kick off autoplay (muted)
+      let dismissed = false;
+      function dismiss() {
+        if (dismissed || !splash) return;
+        dismissed = true;
+        clearTimeout(autoTimer);
+        splash.classList.add('hide');
+        setTimeout(function () {
+          splash.style.display = 'none';
+          try { vid.pause(); vid.removeAttribute('src'); vid.load(); } catch (_) {}
+        }, 550);
+      }
+      if (splash) splash.addEventListener('click', dismiss); // clicking anywhere works
+      // Auto-enter after 3 seconds.
+      const autoTimer = setTimeout(dismiss, 3000);
+    })();
+  </script>
 
   <div id="grid-bg"></div>
   <canvas id="glcanvas"></canvas>
