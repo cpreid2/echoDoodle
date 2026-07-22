@@ -375,7 +375,11 @@
       border-bottom: 1px solid #05070a;
       box-shadow: 0 2px 6px rgba(0,0,0,0.45);
     }
-    #clear-btn { margin-left: auto; display: flex; align-items: center; justify-content: center; padding: 2px 10px; }
+    #undo-btn { margin-left: auto; display: flex; align-items: center; justify-content: center; padding: 2px 8px; }
+    #undo-btn svg { display: block; width: 22px; height: 22px; }
+    #undo-btn:disabled { opacity: 0.3; cursor: default; }
+    #undo-btn:disabled:hover { background: transparent; }
+    #clear-btn { display: flex; align-items: center; justify-content: center; padding: 2px 10px; }
     #clear-btn svg { display: block; width: 26px; height: 26px; }
     .menu { position: relative; }
     .menu { display: flex; align-items: center; }
@@ -573,6 +577,12 @@
       <button type="button" class="menu-title" id="info-btn" aria-label="About">About</button>
     </div>
     <input type="file" id="import-file" accept="application/json,.json" style="display:none">
+    <button type="button" class="menu-title" id="undo-btn" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 14 4 9l5-5"/>
+        <path d="M4 9h11a5 5 0 0 1 5 5v1"/>
+      </svg>
+    </button>
     <button type="button" class="menu-title" id="clear-btn" aria-label="Clear canvas" title="Clear">
       <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 6h18"/>
@@ -838,6 +848,41 @@
     let penPaths = []; // committed, re-editable paths: {anchors,closed,smoothness,color,size,soft}
     let frameNeedsUpdate = Array(MAX_FRAMES).fill(false);
     let frameBuffers = Array.from({ length: MAX_FRAMES }, () => gl.createBuffer());
+
+    // --- Undo history ---------------------------------------------------------
+    // Each entry is a snapshot of the drawable state (free-hand strokes + pen
+    // paths) taken BEFORE a mutating action, so undo restores the prior state.
+    const UNDO_LIMIT = 40;
+    let undoStack = [];
+    function snapshotState() {
+      return {
+        free: freeData.map(a => a.slice()),
+        pens: penPaths.map(p => ({ ...p, anchors: p.anchors.map(a => ({ ...a })) })),
+      };
+    }
+    function pushUndo() {
+      undoStack.push(snapshotState());
+      if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+      updateUndoBtn();
+    }
+    function updateUndoBtn() {
+      const btn = document.getElementById('undo-btn');
+      if (btn) btn.disabled = undoStack.length === 0;
+    }
+    function undo() {
+      if (!undoStack.length) return;
+      // Abandon any in-progress pen path so we don't restore into a half-edit.
+      if (typeof resetActivePen === 'function') resetActivePen();
+      const s = undoStack.pop();
+      for (let f = 0; f < MAX_FRAMES; f++) {
+        freeData[f] = (s.free[f] || []).slice();
+        frameNeedsUpdate[f] = true;
+      }
+      penPaths = s.pens.map(p => ({ ...p, anchors: p.anchors.map(a => ({ ...a })) }));
+      rebakePen(); // rebuild frameData from freeData + penPaths
+      if (typeof drawPenOverlay === 'function') drawPenOverlay();
+      updateUndoBtn();
+    }
 
     let isPlaying = false; 
     let editMode = false; // per-frame editing: paused on a selected frame, draw builds that frame
@@ -1414,6 +1459,7 @@
         alert('That does not look like an echoDoodle file.');
         return;
       }
+      pushUndo(); // loading a project is undoable
       const frames = Math.max(10, Math.min(MAX_FRAMES, p.frameCount | 0));
 
       setSliderValue(framesSlider, frames);
@@ -1617,7 +1663,16 @@
       bottomPanel.style.setProperty('--playhead-color', e.target.value);
     });
     
+    document.getElementById('undo-btn').addEventListener('click', undo);
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        undo();
+      }
+    });
+
     document.getElementById('clear-btn').addEventListener('click', () => {
+      pushUndo(); // clearing is undoable
       for(let i=0; i<MAX_FRAMES; i++) {
         frameData[i] = [];
         freeData[i] = [];
@@ -1715,6 +1770,7 @@
       }
       if (activePointerId !== null) return; // single stroke; extra touches ignored
 
+      pushUndo(); // snapshot before this free-hand stroke
       activePointerId = e.pointerId;
       activePointerType = e.pointerType;
       isDrawing = true;
@@ -2048,6 +2104,7 @@
     }
 
     function beginEditPath(pathIndex, anchorIndex) {
+      pushUndo(); // snapshot the original path before editing it
       const path = penPaths.splice(pathIndex, 1)[0];
       penEditBackup = path; // restore this exact object if the edit is cancelled
       penAnchors = path.anchors.map(p => ({ x: p.x, y: p.y }));
@@ -2166,6 +2223,8 @@
     // Finish the active path: store it as an editable path and bake it in.
     function commitPenPath() {
       if (penAnchors.length < 2) { clearPen(); return; }
+      // New paths snapshot here; edits already snapshotted in beginEditPath().
+      if (!penEditing) pushUndo();
       const s = penEditSettings || {
         color: colorPicker.value,
         size: Math.max(2, parseFloat(sizeSlider.value)),
