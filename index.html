@@ -1719,6 +1719,26 @@
     let penEditBackup = null;   // original of a committed path being re-edited (for cancel)
     const PEN_HIT = 12;
 
+    // Long-press to finish a path (touch / Apple Pencil friendly, since double-tap
+    // is unreliable with a stylus). Hold still for PEN_LONGPRESS_MS to commit.
+    const PEN_LONGPRESS_MS = 500;
+    const PEN_LONGPRESS_MOVE = 12; // px of movement that cancels the hold
+    let penLongPressTimer = null;
+    let penPressPos = null;
+    let penLastPointerType = 'mouse';
+    function cancelPenLongPress() {
+      if (penLongPressTimer) { clearTimeout(penLongPressTimer); penLongPressTimer = null; }
+      penPressPos = null;
+    }
+    function schedulePenLongPress(x, y) {
+      cancelPenLongPress();
+      penPressPos = { x, y };
+      penLongPressTimer = setTimeout(() => {
+        penLongPressTimer = null; penPressPos = null;
+        if (penMode && !penEditing && penAnchors.length >= 2) commitPenPath();
+      }, PEN_LONGPRESS_MS);
+    }
+
     // Catmull-Rom point blended toward the straight line by smoothness s (0..1).
     function penCR(p0, p1, p2, p3, t, s) {
       const lx = p1.x + (p2.x - p1.x) * t;
@@ -1858,6 +1878,25 @@
         ctx.beginPath(); ctx.arc(penHoverPos.x, penHoverPos.y, size / 2, 0, Math.PI * 2);
         ctx.strokeStyle = col; ctx.lineWidth = 1.25; ctx.stroke();
       }
+
+      // Hint so touch / Apple Pencil users know how to finish the path.
+      if (!penEditing && penAnchors.length >= 2) {
+        const last = penAnchors[penAnchors.length - 1];
+        const label = penLastPointerType === 'mouse' ? 'Double-click to finish' : 'Hold to finish';
+        ctx.font = '600 12px system-ui, -apple-system, sans-serif';
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        const tw = ctx.measureText(label).width;
+        let lx = last.x + 14, ly = last.y - 14;
+        if (lx + tw + 12 > window.innerWidth) lx = last.x - tw - 26;
+        if (ly < 12) ly = last.y + 22;
+        ctx.fillStyle = 'rgba(0,0,0,0.62)';
+        ctx.beginPath();
+        (ctx.roundRect ? ctx.roundRect(lx - 7, ly - 10, tw + 14, 20, 5)
+                       : ctx.rect(lx - 7, ly - 10, tw + 14, 20));
+        ctx.fill();
+        ctx.fillStyle = '#00ff41';
+        ctx.fillText(label, lx, ly);
+      }
     }
 
     // Nearest anchor within the ACTIVE path.
@@ -1937,6 +1976,8 @@
 
     function penPointerDown(e) {
       if (e.button === 2) return; // removal is handled by contextmenu
+      penLastPointerType = e.pointerType || penLastPointerType;
+      cancelPenLongPress();
       const x = e.clientX, y = e.clientY;
 
       // Grab an anchor on the ACTIVE path (drag it; or close it in pen mode).
@@ -1979,17 +2020,27 @@
           };
         }
         penAnchors.push({ x, y });
+        // Stylus/touch: hold still after placing a point to finish the path.
+        if (e.pointerType !== 'mouse') schedulePenLongPress(x, y);
         drawPenOverlay();
       }
     }
 
     function penPointerMove(e) {
+      penLastPointerType = e.pointerType || penLastPointerType;
       penHoverPos = { x: e.clientX, y: e.clientY };
-      if (penDragIndex >= 0) penAnchors[penDragIndex] = { x: e.clientX, y: e.clientY };
+      if (penDragIndex >= 0) {
+        penAnchors[penDragIndex] = { x: e.clientX, y: e.clientY };
+        cancelPenLongPress(); // dragging an anchor isn't a hold-to-finish
+      } else if (penPressPos &&
+                 Math.hypot(e.clientX - penPressPos.x, e.clientY - penPressPos.y) > PEN_LONGPRESS_MOVE) {
+        cancelPenLongPress(); // moved too far — treat as drawing, not a hold
+      }
       drawPenOverlay();
     }
 
     function penPointerUp(e) {
+      cancelPenLongPress(); // lifting early = a normal tap, not a hold-to-finish
       if (penDragIndex >= 0) {
         penDragIndex = -1;
         try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
