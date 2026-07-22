@@ -1,0 +1,2304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>echoDoodle</title>
+  <style>
+    :root {
+      --bg: #0a0a0c;
+
+      /* Dark molded-plastic console palette (blends with the canvas) */
+      --plastic-bay: linear-gradient(180deg, #191a1d 0%, #101012 30%, #151517 100%);
+      --plastic-raised: linear-gradient(180deg, #1d1d21 0%, #141416 100%);
+      --plastic-btn: linear-gradient(180deg, #232327 0%, #141417 100%);
+      --plastic-btn-hover: linear-gradient(180deg, #2c2c32 0%, #1b1b1f 100%);
+      --plate-dark: linear-gradient(180deg, #121214 0%, #08080a 100%);
+      --screen: linear-gradient(180deg, #0d0d0f 0%, #141416 100%);
+
+      --ink: #f4f1ea;
+      --ink-muted: #b6b2a8;
+      --plate-text: #f4f1ea;
+      --gold: #ffd54a;
+
+      /* 3D bevel border sets for dark plastic (top right bottom left) */
+      --bevel-raised: #3a3a42 #0a0a0c #040405 #26262c;
+      --bevel-inset: #040405 #26262c #3a3a42 #0a0a0c;
+
+      /* Old-school Matrix-green LED indicators */
+      --led-on: #00ff41;
+      --led-off: #0d3018;
+      --led-glow: rgba(0, 255, 65, 0.7);
+      /* Soft phosphor LCD readout */
+      --lcd-bg: linear-gradient(180deg, #17201a 0%, #101610 100%);
+      --lcd-text: #8ff0a8;
+      /* Muted slider fill that fits the dark console */
+      --slider-fill: #3c7a52;
+
+      /* Follows the brush color at runtime (see JS) */
+      --playhead-color: #ffffff;
+
+      /* Self-contained retro type — no external fonts */
+      --font-mono: "Courier New", Courier, "Lucida Console", monospace;
+      --font-display: "Courier New", Courier, "Lucida Console", monospace;
+    }
+
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+
+    body, html {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background-color: var(--bg); overflow: hidden;
+      font-family: var(--font-mono);
+      touch-action: none;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Grid Background - Always ON */
+    #grid-bg {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background-color: var(--bg);
+      /* background-size is now handled dynamically in JS for a perfect fit */
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      z-index: 0;
+    }
+
+    #glcanvas {
+      width: 100%; height: 100%; display: block; position: absolute; top: 0; left: 0;
+      z-index: 1; background: transparent;
+      /* Hide the system cursor so the brush preview ring acts as the cursor */
+      cursor: none;
+    }
+
+    /* Pen-path editing overlay (drawn in 2D, sits above the GL canvas) */
+    #pen-overlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 3; pointer-events: none; display: none;
+    }
+
+    /* Brush preview ring that follows the cursor before drawing */
+    #brush-preview {
+      position: fixed; left: 0; top: 0; z-index: 5;
+      border-radius: 50%; border: 1.5px solid #fff;
+      transform: translate(-50%, -50%);
+      pointer-events: none; display: none; box-sizing: border-box;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+    }
+
+    /* --- Bottom UI Layout: molded-plastic console bay --- */
+    #bottom-panel {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      width: 96%; max-width: 900px; z-index: 10;
+      background: var(--plastic-bay);
+      color: var(--ink);
+      padding: 14px 20px 18px 20px;
+      border-radius: 16px;
+      border: 3px solid; border-color: var(--bevel-inset);
+      box-shadow:
+        inset 0 3px 8px rgba(0,0,0,0.4),
+        inset 0 -1px 2px rgba(255,255,255,0.08),
+        inset 3px 0 5px rgba(0,0,0,0.12),
+        inset -2px 0 4px rgba(0,0,0,0.1),
+        0 12px 34px rgba(0,0,0,0.55);
+      display: flex; flex-direction: column; gap: 16px;
+      touch-action: auto;
+      transition: padding 0.3s ease;
+    }
+    /* Subtle molded-plastic grain */
+    #bottom-panel::before {
+      content: ""; position: absolute; inset: 0; border-radius: 13px;
+      background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.015) 1px, rgba(0,0,0,0.015) 2px),
+        repeating-linear-gradient(90deg, transparent, transparent 1px, rgba(0,0,0,0.01) 1px, rgba(0,0,0,0.01) 2px);
+      pointer-events: none; z-index: 0;
+    }
+    #bottom-panel > * { position: relative; z-index: 1; }
+
+    /* Top row holding timeline and minimize button */
+    #panel-header {
+      display: flex; align-items: center; gap: 12px; width: 100%;
+    }
+
+    /* Quantized Timeline — recessed LED strip */
+    #timeline-container {
+      display: flex; gap: 2px; height: 22px; flex-grow: 1;
+      padding: 4px 5px; border-radius: 6px;
+      background: linear-gradient(180deg, #0c0c0e 0%, #17171a 100%);
+      border: 2px solid; border-color: #050506 #35353a #3a3a40 #0a0a0c;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.25);
+    }
+
+    /* Each segment is a flat LED cell: dim when off, glowing when lit.
+       The dark housing gap between cells keeps them distinct at any frame count. */
+    .frame-step {
+      flex: 1 1 0; min-width: 2px; border-radius: 1px;
+      background: var(--led-off);
+      cursor: pointer;
+      transition: background 0.08s ease, box-shadow 0.08s ease;
+    }
+
+    .frame-step:hover {
+      background: #1f6b34;
+    }
+
+    /* Lit LED (playhead) — bright green core with a soft bloom (paused) */
+    .frame-step.active {
+      background: radial-gradient(circle at 50% 45%, #9dffb5 0%, #2bff5f 50%, var(--led-on) 100%);
+      box-shadow: 0 0 7px 1px var(--led-glow);
+      position: relative; z-index: 2;
+    }
+
+    /* While playing, the travelling playhead is a solid bright green (no hot core) */
+    #bottom-panel.playing .frame-step.active {
+      background: var(--led-on);
+      box-shadow: 0 0 6px 1px var(--led-glow);
+    }
+
+    /* Per-frame edit mode indicators */
+    #bottom-panel.editing .frame-step.active {
+      background: radial-gradient(circle at 50% 45%, #d6ffe0 0%, #2bff5f 50%, var(--led-on) 100%);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.7), 0 0 9px 1px var(--led-glow);
+    }
+    #bottom-panel.editing #play-btn {
+      border-color: #b8860b;
+      color: var(--gold);
+    }
+
+    /* Play / Pause Button — transport key */
+    #play-btn {
+      background: var(--plastic-btn);
+      border: 2px solid; border-color: var(--bevel-raised);
+      color: var(--ink); border-radius: 7px; cursor: pointer;
+      width: 40px; height: 28px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.16);
+      transition: all 0.1s ease;
+    }
+    #play-btn:hover { background: var(--plastic-btn-hover); }
+    #play-btn:active { transform: translateY(1px); box-shadow: inset 1px 2px 4px rgba(0,0,0,0.35); border-color: var(--bevel-inset); }
+    #play-btn svg { width: 12px; height: 12px; fill: currentColor; }
+
+    /* Minimize Button */
+    #minimize-btn {
+      background: var(--plastic-btn);
+      border: 2px solid; border-color: var(--bevel-raised);
+      color: var(--ink); font-family: var(--font-mono); font-weight: 700;
+      font-size: 10px; letter-spacing: 1px; padding: 6px 11px; border-radius: 7px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.16);
+      transition: all 0.1s ease;
+    }
+    #minimize-btn:hover { background: var(--plastic-btn-hover); }
+    #minimize-btn:active { transform: translateY(1px); box-shadow: inset 1px 2px 4px rgba(0,0,0,0.35); border-color: var(--bevel-inset); }
+
+    /* Controls Grid */
+    #controls-layout {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 32px;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Minimized State */
+    #bottom-panel.minimized #controls-layout { display: none; }
+    #bottom-panel.minimized { padding-bottom: 16px; }
+
+    .control-column { display: flex; flex-direction: column; gap: 7px; }
+    
+    .col-title {
+      color: var(--plate-text); font-family: var(--font-display);
+      font-size: 13px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; text-align: center;
+      background: var(--plate-dark);
+      border: 1px solid; border-color: #5a5a5a #1a1a1a #0a0a0a #3a3a3a;
+      border-radius: 4px; padding: 5px 8px; margin-bottom: 4px;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.15), 0 1px 2px rgba(0,0,0,0.3);
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* The Brush title is split into three clickable tool tabs (Brush/Pen/Edit) */
+    .tool-tabs { gap: 3px; padding: 3px; }
+    .tool-tab {
+      flex: 1; cursor: pointer; user-select: none;
+      font-family: var(--font-display); font-size: 11px; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--ink-muted); background: transparent; border: none; border-radius: 3px;
+      padding: 4px 2px; transition: color .12s, background .12s, box-shadow .12s;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    }
+    .tool-tab:hover { color: var(--ink); }
+    .tool-tab.active {
+      color: var(--ink); background: var(--plastic-raised);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 1px 2px rgba(0,0,0,0.4);
+    }
+    .tool-tab.active[data-tool="pen"] {
+      color: var(--led-on); text-shadow: 0 0 6px var(--led-glow), 0 1px 2px rgba(0,0,0,0.6);
+      box-shadow: inset 0 0 0 1px var(--led-on), 0 1px 2px rgba(0,0,0,0.4);
+    }
+    .tool-tab.active[data-tool="edit"] {
+      color: var(--gold); text-shadow: 0 0 6px rgba(255,213,74,0.6), 0 1px 2px rgba(0,0,0,0.6);
+      box-shadow: inset 0 0 0 1px var(--gold), 0 1px 2px rgba(0,0,0,0.4);
+    }
+
+    .control-group { display: flex; flex-direction: column; gap: 4px; }
+    
+    .label { 
+      color: var(--ink); font-family: var(--font-mono); font-size: 12px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase; 
+      display: flex; justify-content: space-between; align-items: center;
+      text-shadow: 0 1px 1px rgba(0,0,0,0.7);
+    }
+    
+    /* Mini phosphor LCD readout */
+    .val-display { 
+      color: var(--lcd-text); font-size: 11px; letter-spacing: 1px; font-weight: 700;
+      font-family: var(--font-mono);
+      min-width: 34px; text-align: right; padding: 1px 6px; border-radius: 3px;
+      background: var(--lcd-bg);
+      border: 1px solid #05070a;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.35);
+      text-shadow: 0 0 5px rgba(143,240,168,0.65);
+    }
+
+    /* Inputs Styling */
+    input[type="color"] {
+      -webkit-appearance: none; border: none; width: 100%; height: 24px;
+      cursor: pointer; background: transparent; padding: 0;
+    }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+    input[type="color"]::-webkit-color-swatch { border: 2px solid; border-color: var(--bevel-inset); border-radius: 4px; }
+    input[type="color"] { border: 2px solid; border-color: var(--bevel-inset); border-radius: 5px; height: 26px;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.3); }
+
+    /* Physical fader-groove sliders — matrix-green fill up to the thumb */
+    input[type="range"] { 
+      -webkit-appearance: none; -moz-appearance: none; appearance: none;
+      width: 100%; height: 14px; margin: 4px 0 6px; padding: 0;
+      border-radius: 7px; cursor: pointer; --fill: 0%;
+      background:
+        linear-gradient(to right, var(--slider-fill) 0 var(--fill), transparent var(--fill) 100%),
+        linear-gradient(180deg, rgba(0,0,0,0.25), transparent 45%),
+        linear-gradient(180deg, #141416 0%, #1e1e22 50%, #161619 100%);
+      border: 2px solid; border-color: var(--bevel-inset);
+      box-shadow: inset 0 2px 5px rgba(0,0,0,0.7), inset 0 -1px 1px rgba(255,255,255,0.06), 0 1px 0 rgba(255,255,255,0.06);
+    }
+    input[type="range"]:focus { outline: none; }
+    input[type="range"]::-moz-focus-outer { border: 0; }
+    input[type="range"]::-webkit-slider-runnable-track { 
+      width: 100%; height: 10px; background: transparent; border: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      height: 24px; width: 16px; border-radius: 4px;
+      background: linear-gradient(180deg, #7a7268 0%, #5a5448 50%, #4a4238 100%);
+      -webkit-appearance: none; margin-top: -9px;
+      border: 2px solid; border-color: #8a8278 #3a3630 #2a2620 #5a5448;
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -1px 1px rgba(0,0,0,0.2);
+      transition: transform 0.08s;
+    }
+    input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.06); }
+    /* Firefox */
+    input[type="range"]::-moz-range-track {
+      width: 100%; height: 10px; background: transparent; border: none;
+    }
+    input[type="range"]::-moz-range-thumb {
+      height: 22px; width: 15px; border-radius: 4px;
+      background: linear-gradient(180deg, #7a7268 0%, #5a5448 50%, #4a4238 100%);
+      border: 2px solid; border-color: #8a8278 #3a3630 #2a2620 #5a5448;
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -1px 1px rgba(0,0,0,0.2);
+    }
+    
+    .button-row { display: flex; gap: 10px; margin-top: 4px; }
+    
+    .action-btn {
+      padding: 8px 10px; border-radius: 7px; cursor: pointer;
+      font-family: var(--font-mono); font-weight: 700;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+      transition: all 0.1s ease; display: flex; align-items: center; justify-content: center;
+      border: 2px solid; border-color: var(--bevel-raised);
+      background: var(--plastic-btn); color: var(--ink);
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.16);
+    }
+    .action-btn:hover { background: var(--plastic-btn-hover); }
+    .action-btn:active { transform: translateY(1px); box-shadow: inset 1px 2px 4px rgba(0,0,0,0.3); border-color: var(--bevel-inset); }
+    
+    #sync-btn { flex: 1; }
+    #sync-btn.active {
+      background: radial-gradient(circle at 40% 30%, #ffe37a, var(--gold));
+      border-color: #b8860b #6a5000 #4a3800 #8a6800; color: #3a2c00;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 0 6px rgba(255,213,74,0.5);
+    }
+    
+    /* Export recording state (Export lives in the top menu bar) */
+    #export-btn.recording { color: #ff6b6b; animation: recPulse 1s infinite; }
+    @keyframes recPulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+
+    /* --- Persistent top menu bar (spans the full width) --- */
+    #menu-bar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+      display: flex; align-items: center; gap: 2px;
+      padding: 4px 8px;
+      background: var(--plastic-bay);
+      border-bottom: 1px solid #05070a;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+    }
+    #clear-btn { margin-left: auto; display: flex; align-items: center; justify-content: center; padding: 2px 10px; }
+    #clear-btn svg { display: block; width: 26px; height: 26px; }
+    .menu { position: relative; }
+    .menu { display: flex; align-items: center; }
+    .menu-title {
+      background: transparent; border: none; color: var(--ink);
+      font-family: var(--font-mono); font-weight: 700; font-size: 14px;
+      text-transform: uppercase; letter-spacing: 1px;
+      padding: 5px 12px; border-radius: 5px; cursor: pointer;
+      transition: background 0.1s ease; line-height: 1;
+    }
+    .menu-title:hover, .menu.open .menu-title { background: var(--plastic-btn-hover); }
+    #export-btn { color: #5fd07a; }
+    .menu-dropdown {
+      position: absolute; top: 100%; left: 0; margin-top: 3px; z-index: 31;
+      min-width: 130px; display: flex; flex-direction: column; gap: 2px;
+      padding: 4px; border-radius: 7px;
+      background: var(--plastic-raised);
+      border: 2px solid; border-color: var(--bevel-raised);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.55);
+    }
+    .menu-item {
+      background: transparent; border: none; color: var(--ink);
+      font-family: var(--font-mono); font-weight: 700; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.5px; text-align: left;
+      padding: 7px 10px; border-radius: 4px; cursor: pointer; white-space: nowrap;
+      transition: background 0.1s ease;
+    }
+    .menu-item:hover { background: var(--plastic-btn-hover); }
+
+    /* Utility */
+    .hidden { display: none !important; }
+
+    /* Info Button + About Dialog */
+    #about-overlay {
+      position: absolute; inset: 0; z-index: 40;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.45);
+    }
+    #about-dialog {
+      background: var(--plastic-raised);
+      border: 3px solid; border-color: var(--bevel-raised);
+      border-radius: 12px; padding: 30px 44px; text-align: center;
+      color: var(--ink); font-family: var(--font-mono);
+      box-shadow: 4px 6px 16px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.12);
+    }
+    #about-dialog .about-title {
+      color: var(--plate-text); font-family: var(--font-display);
+      font-size: 22px; font-weight: 700; letter-spacing: 1px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    }
+    #about-dialog .about-sub {
+      color: var(--ink-muted); font-family: var(--font-mono);
+      font-size: 13px; margin-top: 10px; letter-spacing: 0.5px;
+    }
+    #about-close {
+      margin-top: 22px; padding: 8px 22px; border-radius: 7px; cursor: pointer;
+      font-family: var(--font-mono); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+      border: 2px solid; border-color: var(--bevel-raised);
+      background: var(--plastic-btn); color: var(--ink);
+      box-shadow: 1px 2px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.16);
+      transition: all 0.1s ease;
+    }
+    #about-close:hover { background: var(--plastic-btn-hover); }
+    #about-close:active { transform: translateY(1px); box-shadow: inset 1px 2px 3px rgba(0,0,0,0.3); border-color: var(--bevel-inset); }
+
+    /* Curve Editor icon button (replaces the old checkbox) */
+    .icon-btn {
+      background: var(--plastic-btn);
+      border: 2px solid; border-color: var(--bevel-raised);
+      color: var(--ink); border-radius: 6px;
+      width: 30px; height: 22px; padding: 0; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.16);
+      transition: all 0.1s ease;
+    }
+    .icon-btn:hover { background: var(--plastic-btn-hover); }
+    .icon-btn:active { transform: translateY(1px); box-shadow: inset 1px 1px 3px rgba(0,0,0,0.3); }
+    .icon-btn.active {
+      background: radial-gradient(circle at 40% 30%, #ffe37a, var(--gold));
+      border-color: #b8860b #6a5000 #4a3800 #8a6800; color: #3a2c00;
+    }
+    .icon-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+    .label-controls { display: flex; align-items: center; gap: 8px; }
+    .toggle-btn {
+      background: var(--plastic-btn);
+      border: 2px solid; border-color: var(--bevel-raised);
+      color: var(--ink); border-radius: 6px; height: 22px; padding: 0 8px;
+      font-family: var(--font-mono); font-weight: 700; font-size: 9px; letter-spacing: 1px; cursor: pointer;
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.16);
+      transition: all 0.1s ease;
+    }
+    .toggle-btn:hover { background: var(--plastic-btn-hover); }
+    .toggle-btn.active {
+      background: radial-gradient(circle at 40% 30%, #ffe37a, var(--gold));
+      border-color: #b8860b #6a5000 #4a3800 #8a6800; color: #3a2c00;
+    }
+
+    /* Floating Curve Editor Panel */
+    #curve-panel {
+      position: fixed; top: 64px; left: 24px; z-index: 30;
+      width: 264px;
+      background: var(--plastic-bay);
+      border: 3px solid; border-color: var(--bevel-inset);
+      border-radius: 14px; color: var(--ink);
+      box-shadow: 4px 6px 16px rgba(0,0,0,0.45), inset 0 1px 2px rgba(255,255,255,0.4);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #curve-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 8px 8px 12px; cursor: move;
+      background: var(--plate-dark);
+      border-bottom: 2px solid #1a1a1a;
+      touch-action: none;
+    }
+    .curve-panel-title {
+      color: var(--plate-text); font-family: var(--font-display);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+      text-transform: uppercase; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    .curve-panel-actions { display: flex; gap: 6px; }
+    .curve-panel-actions button {
+      background: var(--plastic-btn); border: 2px solid; border-color: var(--bevel-raised);
+      color: var(--ink); width: 22px; height: 22px; border-radius: 5px;
+      cursor: pointer; font-size: 14px; line-height: 1; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.16);
+    }
+    .curve-panel-actions button:hover { background: var(--plastic-btn-hover); }
+    .curve-panel-actions button:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(0,0,0,0.3); }
+    #curve-panel-body { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+
+    .curve-field { display: flex; align-items: center; gap: 8px; }
+    .curve-field-label {
+      flex: 0 0 66px; color: var(--ink-muted); font-family: var(--font-mono);
+      font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    #curve-param, #curve-preset {
+      -webkit-appearance: none; appearance: none; flex: 1;
+      width: 100%; padding: 5px 8px; border-radius: 5px;
+      background: rgba(0,0,0,0.35); color: var(--ink);
+      border: 2px solid; border-color: var(--bevel-inset);
+      font-family: var(--font-mono); font-weight: 700; font-size: 11px;
+      text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
+    }
+    #curve-param:focus, #curve-preset:focus { outline: none; }
+    #curve-param option, #curve-preset option { background: #26262b; color: #dcd8d0; }
+    .curve-hint {
+      color: var(--ink-muted); font-family: var(--font-mono); font-size: 9px;
+      letter-spacing: 0.3px; text-align: center; line-height: 1.4; opacity: 0.85;
+    }
+    #curve-canvas {
+      width: 100%; height: 130px; display: block;
+      background: var(--screen);
+      border: 2px solid; border-color: #1a1815 #4a4438 #5a5448 #2a2820; border-radius: 6px;
+      box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
+      touch-action: none; cursor: grab;
+    }
+    #curve-canvas:active { cursor: grabbing; }
+
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      #bottom-panel { width: 100%; bottom: 0; border-radius: 16px 16px 0 0; border-bottom: none; border-left: none; border-right: none; }
+      #controls-layout { grid-template-columns: 1fr 1fr; gap: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="grid-bg"></div>
+  <canvas id="glcanvas"></canvas>
+  <canvas id="pen-overlay"></canvas>
+  <div id="brush-preview"></div>
+
+  <!-- Persistent top menu bar -->
+  <div id="menu-bar">
+    <div class="menu" id="file-menu">
+      <button type="button" class="menu-title" id="file-menu-btn" aria-haspopup="true" aria-expanded="false">File</button>
+      <div class="menu-dropdown hidden">
+        <button type="button" class="menu-item" id="raw-btn">Save</button>
+        <button type="button" class="menu-item" id="import-btn">Load</button>
+      </div>
+    </div>
+    <div class="menu" id="export-menu">
+      <button type="button" class="menu-title" id="export-btn">Export</button>
+    </div>
+    <div class="menu" id="about-menu">
+      <button type="button" class="menu-title" id="info-btn" aria-label="About">About</button>
+    </div>
+    <input type="file" id="import-file" accept="application/json,.json" style="display:none">
+    <button type="button" class="menu-title" id="clear-btn" aria-label="Clear canvas" title="Clear">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 6h18"/>
+        <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/>
+        <path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"/>
+        <path d="M10 11v6M14 11v6"/>
+      </svg>
+    </button>
+  </div>
+  <div id="about-overlay" class="hidden">
+    <div id="about-dialog">
+      <div class="about-title">echoDoodle</div>
+      <div class="about-sub">made by Colin Reid</div>
+      <button id="about-close">Close</button>
+    </div>
+  </div>
+
+  <!-- Floating, draggable, minimizable Curve Editor -->
+  <div id="curve-panel" class="hidden">
+    <div id="curve-panel-header">
+      <span class="curve-panel-title">Curve Editor</span>
+      <div class="curve-panel-actions">
+        <button id="curve-close-btn" title="Close" aria-label="Close">&times;</button>
+      </div>
+    </div>
+    <div id="curve-panel-body">
+      <label class="curve-field">
+        <span class="curve-field-label">Parameter</span>
+        <select id="curve-param">
+          <option value="size">Size</option>
+          <option value="opacity">Opacity</option>
+          <option value="blur">Blur</option>
+          <option value="noise">Noise</option>
+          <option value="softness">Softness</option>
+          <option value="trail">Trail Length</option>
+        </select>
+      </label>
+      <label class="curve-field">
+        <span class="curve-field-label">Wave</span>
+        <select id="curve-preset">
+          <option value="rampUp">Ramp Up</option>
+          <option value="rampDown">Ramp Down</option>
+          <option value="easeIn">Ease In</option>
+          <option value="easeOut">Ease Out</option>
+          <option value="easeInOut">Ease In / Out</option>
+          <option value="sine">Sine Hump</option>
+          <option value="triangle">Triangle</option>
+          <option value="pulse">Pulse</option>
+          <option value="valley">Valley</option>
+          <option value="constant">Constant</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+      <canvas id="curve-canvas" width="240" height="130"></canvas>
+      <div class="curve-hint">Double-click to add &middot; Right-click to remove &middot; Drag to shape</div>
+    </div>
+  </div>
+
+  <div id="bottom-panel" class="minimized">
+    <!-- Header: Timeline & Minimize Button -->
+    <div id="panel-header">
+      <button id="play-btn" aria-label="Play/Pause"></button>
+      <div id="timeline-container"></div>
+      <button id="minimize-btn">SHOW</button>
+    </div>
+
+    <!-- Organized Sliders -->
+    <div id="controls-layout">
+      <!-- Brush Settings -->
+      <div class="control-column">
+        <div class="col-title tool-tabs" id="tool-tabs">
+          <button type="button" class="tool-tab active" data-tool="brush">Brush</button>
+          <button type="button" class="tool-tab" data-tool="pen">Pen</button>
+          <button type="button" class="tool-tab" data-tool="edit">Edit</button>
+        </div>
+        <div class="control-group">
+          <span class="label">Color</span>
+          <input type="color" id="color-picker" value="#ffffff">
+        </div>
+        <div class="control-group">
+          <span class="label">Size</span>
+          <input type="range" id="size-slider" min="2" max="75" value="8">
+        </div>
+        <div class="control-group">
+          <span class="label">Softness</span>
+          <input type="range" id="soft-slider" min="0" max="1" step="0.01" value="0">
+        </div>
+        <div class="control-group" id="pen-smooth-group" style="display:none;">
+          <span class="label">Smoothness <span id="val-smooth" class="val-display">60</span></span>
+          <input type="range" id="pen-smooth" min="0" max="100" value="60">
+        </div>
+      </div>
+
+      <!-- Animation & Recording Controls -->
+      <div class="control-column">
+        <div class="col-title">Animation</div>
+        <div class="control-group">
+          <span class="label">Frames <span id="val-frames" class="val-display">30</span></span>
+          <input type="range" id="frames-slider" min="10" max="180" value="30">
+        </div>
+        <div class="control-group">
+          <span class="label">Speed <span id="val-speed" class="val-display">1.0x</span></span>
+          <input type="range" id="speed-slider" min="0.1" max="1.5" step="0.1" value="1.0">
+        </div>
+        <div class="control-group">
+          <span class="label">
+            Curve Editor
+            <span class="label-controls">
+              <button id="curve-onoff" class="toggle-btn" aria-pressed="false">OFF</button>
+              <button id="curve-toggle-btn" class="icon-btn" aria-label="Open curve editor" title="Curve scaling editor">
+                <svg viewBox="0 0 20 20"><path d="M3 16 C 8 16, 9 4, 17 4"/></svg>
+              </button>
+            </span>
+          </span>
+        </div>
+        <div class="button-row">
+          <button id="sync-btn" class="action-btn">Sync</button>
+        </div>
+      </div>
+
+      <!-- Trail Effects -->
+      <div class="control-column">
+        <div class="col-title">Trail Effect</div>
+        <div class="control-group">
+          <span class="label">Length <span id="val-trail" class="val-display">30</span></span>
+          <input type="range" id="trail-slider" min="0" max="180" value="30">
+        </div>
+        <div class="control-group">
+          <span class="label">Opacity</span>
+          <input type="range" id="opacity-slider" min="0.1" max="1.0" step="0.05" value="0.7">
+        </div>
+        <div class="control-group">
+          <span class="label">Blur</span>
+          <input type="range" id="blur-slider" min="0" max="15" step="0.1" value="4">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('glcanvas');
+    const gl = canvas.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false });
+
+    let dpr = window.devicePixelRatio || 1;
+    function resize() {
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      gl.viewport(0, 0, canvas.width, canvas.height);
+
+      // Pen overlay matches the canvas (backing store in device px, drawn in CSS px)
+      const pen = document.getElementById('pen-overlay');
+      pen.width = window.innerWidth * dpr;
+      pen.height = window.innerHeight * dpr;
+      const pctx = pen.getContext('2d');
+      pctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      try { if (typeof drawPenOverlay === 'function') drawPenOverlay(); } catch (_) {}
+
+      // Responsive Grid Setup (Method 1 Fix)
+      const grid = document.getElementById('grid-bg');
+      const cols = Math.round(window.innerWidth / 40);
+      const exactSize = window.innerWidth / cols;
+      grid.style.backgroundSize = `${exactSize}px ${exactSize}px`;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+
+    // --- Shaders ---
+    const vsSource = `
+      attribute vec2 a_position;
+      attribute vec3 a_color;
+      attribute float a_size;
+      attribute float a_pBlur;   // per-point brush blur baked at draw time
+      attribute float a_pSoft;   // per-point brush softness baked at draw time
+      attribute float a_pAlpha;  // per-point brush opacity baked at draw time
+      uniform vec2 u_resolution;
+      uniform float u_blurSpread; // trail (echo) blur
+      uniform float u_sizeOffset; // trail (echo) scale
+      varying vec3 v_color;
+      varying float v_blur;
+      varying float v_soft;
+      varying float v_pAlpha;
+
+      void main() {
+        vec2 zeroToOne = a_position / u_resolution;
+        vec2 zeroToTwo = zeroToOne * 2.0;
+        vec2 clipSpace = zeroToTwo - 1.0;
+        gl_Position = vec4(clipSpace * vec2(1.0, -1.0), 0.0, 1.0);
+        v_color = a_color;
+
+        float totalBlur = u_blurSpread + a_pBlur;
+        v_blur = totalBlur;
+        v_soft = a_pSoft;
+        v_pAlpha = a_pAlpha;
+
+        float finalSize = a_size * (1.0 + totalBlur * 1.5) * (1.0 + u_sizeOffset);
+        gl_PointSize = max(0.5, finalSize); 
+      }
+    `;
+
+    const fsSource = `
+      precision mediump float;
+      varying vec3 v_color;
+      varying float v_blur;
+      varying float v_soft;
+      varying float v_pAlpha;
+      uniform float u_alphaMultiplier;
+      uniform float u_baseOpacity;
+
+      void main() {
+        float d = distance(gl_PointCoord, vec2(0.5)) * 2.0;
+        if (d > 1.0) discard;
+        float hardAlpha = smoothstep(1.0, 0.85, d);
+        float softAlpha = exp(-d * d * 4.0) * (1.0 - smoothstep(0.8, 1.0, d));
+        float blurFactor = clamp(v_blur / 3.0, 0.0, 1.0);
+        blurFactor = clamp(blurFactor + v_soft, 0.0, 1.0);
+        float alpha = mix(hardAlpha, softAlpha, blurFactor);
+        float energy = 1.0 / (1.0 + v_blur * 0.8);
+        float finalAlpha = alpha * u_alphaMultiplier * energy * u_baseOpacity * v_pAlpha;
+        
+        gl_FragColor = vec4(v_color * finalAlpha, finalAlpha);
+      }
+    `;
+
+    function compileShader(type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(shader));
+      return shader;
+    }
+
+    const program = gl.createProgram();
+    gl.attachShader(program, compileShader(gl.VERTEX_SHADER, vsSource));
+    gl.attachShader(program, compileShader(gl.FRAGMENT_SHADER, fsSource));
+    gl.linkProgram(program);
+    gl.useProgram(program);
+
+    const a_pos = gl.getAttribLocation(program, "a_position");
+    const a_col = gl.getAttribLocation(program, "a_color");
+    const a_size = gl.getAttribLocation(program, "a_size");
+    const a_pBlur = gl.getAttribLocation(program, "a_pBlur");
+    const a_pSoft = gl.getAttribLocation(program, "a_pSoft");
+    const a_pAlpha = gl.getAttribLocation(program, "a_pAlpha");
+    const u_res = gl.getUniformLocation(program, "u_resolution");
+    const u_blur = gl.getUniformLocation(program, "u_blurSpread");
+    const u_alpha = gl.getUniformLocation(program, "u_alphaMultiplier");
+    const u_baseOp = gl.getUniformLocation(program, "u_baseOpacity");
+    const u_size = gl.getUniformLocation(program, "u_sizeOffset");
+
+    const ghostBuffer = gl.createBuffer();
+
+    // --- Engine State ---
+    const MAX_FRAMES = 180;
+    const floatsPerPoint = 9; // x,y, r,g,b, size, pBlur, pSoft, pAlpha
+    
+    let frameData = Array.from({ length: MAX_FRAMES }, () => []);
+    // Free-hand strokes, kept separate from pen paths so committed paths stay
+    // editable. frameData = freeData + (every baked pen path). See rebakePen().
+    let freeData = Array.from({ length: MAX_FRAMES }, () => []);
+    let penPaths = []; // committed, re-editable paths: {anchors,closed,smoothness,color,size,soft}
+    let frameNeedsUpdate = Array(MAX_FRAMES).fill(false);
+    let frameBuffers = Array.from({ length: MAX_FRAMES }, () => gl.createBuffer());
+
+    let isPlaying = false; 
+    let editMode = false; // per-frame editing: paused on a selected frame, draw builds that frame
+    let playheadPos = 0.0;
+    let currentFrame = 0;
+
+    let firstParticle = null; 
+    let firstParticleFrame = null; 
+    let hasCompletedFirstCycle = false;
+
+    let strokeRecordingActive = false; 
+    let isSyncActive = false;
+    
+    // UI Elements
+    const colorPicker = document.getElementById('color-picker');
+    const sizeSlider = document.getElementById('size-slider');
+    const opacitySlider = document.getElementById('opacity-slider');
+    const framesSlider = document.getElementById('frames-slider');
+    const speedSlider = document.getElementById('speed-slider');
+    const trailSlider = document.getElementById('trail-slider');
+    const blurSlider = document.getElementById('blur-slider');
+    const softSlider = document.getElementById('soft-slider');
+    
+    const valFrames = document.getElementById('val-frames');
+    const valSpeed = document.getElementById('val-speed');
+    const valTrail = document.getElementById('val-trail');
+    
+    const bottomPanel = document.getElementById('bottom-panel');
+    const timelineContainer = document.getElementById('timeline-container');
+    const minimizeBtn = document.getElementById('minimize-btn');
+    const playBtn = document.getElementById('play-btn');
+    const syncBtn = document.getElementById('sync-btn');
+    const exportBtn = document.getElementById('export-btn');
+    let frameSteps = [];
+
+    // --- Minimize Logic ---
+    minimizeBtn.addEventListener('click', () => {
+      bottomPanel.classList.toggle('minimized');
+      minimizeBtn.innerText = bottomPanel.classList.contains('minimized') ? 'SHOW' : 'HIDE';
+    });
+
+    // --- Play / Pause Logic ---
+    const PLAY_ICON = '<svg viewBox="0 0 16 16"><path d="M3 2l11 6-11 6z"/></svg>';
+    const PAUSE_ICON = '<svg viewBox="0 0 16 16"><path d="M3 2h4v12H3zM9 2h4v12H9z"/></svg>';
+    let lastPlayState = null;
+    function updatePlayBtn() {
+      if (isPlaying === lastPlayState) return;
+      playBtn.innerHTML = isPlaying ? PAUSE_ICON : PLAY_ICON;
+      bottomPanel.classList.toggle('playing', isPlaying);
+      lastPlayState = isPlaying;
+    }
+    updatePlayBtn();
+
+    playBtn.addEventListener('click', () => {
+      // Pressing play always leaves per-frame edit mode and resumes the loop.
+      if (editMode) {
+        editMode = false;
+        isPlaying = true;
+      } else {
+        isPlaying = !isPlaying;
+      }
+      updateEditModeUI();
+      updatePlayBtn();
+    });
+
+    function updateEditModeUI() {
+      bottomPanel.classList.toggle('editing', editMode);
+    }
+
+    // --- About Dialog Logic ---
+    const infoBtn = document.getElementById('info-btn');
+    const aboutOverlay = document.getElementById('about-overlay');
+    const aboutClose = document.getElementById('about-close');
+    infoBtn.addEventListener('click', () => aboutOverlay.classList.remove('hidden'));
+    aboutClose.addEventListener('click', () => aboutOverlay.classList.add('hidden'));
+    aboutOverlay.addEventListener('click', (e) => {
+      if (e.target === aboutOverlay) aboutOverlay.classList.add('hidden');
+    });
+
+    // --- Curve Editor (parameter scaling over the loop) ---
+    const curveToggleBtn = document.getElementById('curve-toggle-btn');
+    const curveOnOff = document.getElementById('curve-onoff');
+    const curveParamSelect = document.getElementById('curve-param');
+    const curveCanvas = document.getElementById('curve-canvas');
+    const curvePanel = document.getElementById('curve-panel');
+    const curvePanelHeader = document.getElementById('curve-panel-header');
+    const curveCloseBtn = document.getElementById('curve-close-btn');
+    const curveCtx = curveCanvas.getContext('2d');
+
+    const curvePresetSelect = document.getElementById('curve-preset');
+
+    let curveEnabled = false;
+    let curveParam = 'size';
+
+    // Common animation "waves" as editable keyframe sets (x = loop position 0..1, y = value 0..1)
+    const CURVE_PRESETS = {
+      rampUp:    [ {x:0,y:0}, {x:1,y:1} ],
+      rampDown:  [ {x:0,y:1}, {x:1,y:0} ],
+      easeIn:    [ {x:0,y:0}, {x:0.45,y:0.1}, {x:0.75,y:0.32}, {x:1,y:1} ],
+      easeOut:   [ {x:0,y:0}, {x:0.25,y:0.68}, {x:0.55,y:0.9}, {x:1,y:1} ],
+      easeInOut: [ {x:0,y:0}, {x:0.25,y:0.08}, {x:0.5,y:0.5}, {x:0.75,y:0.92}, {x:1,y:1} ],
+      sine:      [ {x:0,y:0}, {x:0.25,y:0.71}, {x:0.5,y:1}, {x:0.75,y:0.71}, {x:1,y:0} ],
+      triangle:  [ {x:0,y:0}, {x:0.5,y:1}, {x:1,y:0} ],
+      pulse:     [ {x:0,y:0}, {x:0.15,y:1}, {x:0.85,y:1}, {x:1,y:0} ],
+      valley:    [ {x:0,y:1}, {x:0.25,y:0.29}, {x:0.5,y:0}, {x:0.75,y:0.29}, {x:1,y:1} ],
+      constant:  [ {x:0,y:1}, {x:1,y:1} ]
+    };
+
+    function clonePreset(name) {
+      return (CURVE_PRESETS[name] || CURVE_PRESETS.rampUp).map(p => ({ x: p.x, y: p.y }));
+    }
+
+    // Editable keyframes, kept sorted by x with locked endpoints at x=0 and x=1.
+    let curvePoints = clonePreset('sine');
+    curvePresetSelect.value = 'sine';
+
+    const CURVE_PAD = 12;
+    const HIT_RADIUS = 16;   // px hit test for grabbing / removing a point
+    const MIN_X_GAP = 0.02;  // minimum spacing between neighbouring keyframes
+    let curveLUT = new Array(101).fill(0.5);
+
+    function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+    // Catmull-Rom interpolation through the keyframes (linear when only two points).
+    function sampleCurveAt(x) {
+      const pts = curvePoints;
+      const n = pts.length;
+      x = clamp01(x);
+      if (n === 0) return 0.5;
+      if (x <= pts[0].x) return clamp01(pts[0].y);
+      if (x >= pts[n-1].x) return clamp01(pts[n-1].y);
+      let i = 0;
+      while (i < n - 1 && x > pts[i+1].x) i++;
+      const p1 = pts[i], p2 = pts[i+1];
+      const span = (p2.x - p1.x) || 1e-6;
+      const t = (x - p1.x) / span;
+      if (n === 2) return clamp01(p1.y + (p2.y - p1.y) * t);
+      const p0 = pts[i-1] || p1;
+      const p3 = pts[i+2] || p2;
+      const t2 = t*t, t3 = t2*t;
+      const y = 0.5 * ( (2*p1.y)
+              + (-p0.y + p2.y) * t
+              + (2*p0.y - 5*p1.y + 4*p2.y - p3.y) * t2
+              + (-p0.y + 3*p1.y - 3*p2.y + p3.y) * t3 );
+      return clamp01(y);
+    }
+
+    function buildCurveLUT() {
+      const N = curveLUT.length;
+      const arr = new Array(N);
+      for (let i = 0; i < N; i++) arr[i] = sampleCurveAt(i / (N - 1));
+      curveLUT = arr;
+    }
+
+    function sampleLUT(lut, x) {
+      const N = lut.length;
+      return lut[Math.round(clamp01(x) * (N - 1))];
+    }
+    function sampleCurve(x) { return sampleLUT(curveLUT, x); }
+
+    // A frozen copy of the current curve so a baked path keeps its own scaling
+    // even if the global curve is later changed.
+    function currentCurveSnapshot() {
+      return { enabled: curveEnabled, param: curveParam, lut: curveLUT.slice() };
+    }
+
+    function curveToScreen(p) {
+      const W = curveCanvas.width, H = curveCanvas.height;
+      return {
+        x: CURVE_PAD + p.x * (W - 2 * CURVE_PAD),
+        y: (H - CURVE_PAD) - p.y * (H - 2 * CURVE_PAD)
+      };
+    }
+
+    function drawCurveEditor() {
+      const W = curveCanvas.width, H = curveCanvas.height;
+      const ctx = curveCtx;
+      ctx.clearRect(0, 0, W, H);
+
+      // grid
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const gx = CURVE_PAD + (i / 4) * (W - 2 * CURVE_PAD);
+        const gy = CURVE_PAD + (i / 4) * (H - 2 * CURVE_PAD);
+        ctx.beginPath(); ctx.moveTo(gx, CURVE_PAD); ctx.lineTo(gx, H - CURVE_PAD); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(CURVE_PAD, gy); ctx.lineTo(W - CURVE_PAD, gy); ctx.stroke();
+      }
+
+      const accent = colorPicker.value;
+
+      // smooth curve sampled across the loop
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      const STEPS = 120;
+      for (let i = 0; i <= STEPS; i++) {
+        const x = i / STEPS;
+        const s = curveToScreen({ x, y: sampleCurveAt(x) });
+        if (i === 0) ctx.moveTo(s.x, s.y); else ctx.lineTo(s.x, s.y);
+      }
+      ctx.stroke();
+
+      // playhead marker on curve
+      if (curveEnabled) {
+        const af = parseInt(framesSlider.value, 10);
+        const lx = af > 0 ? clamp01(playheadPos / af) : 0;
+        const ps = curveToScreen({ x: lx, y: sampleCurve(lx) });
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath(); ctx.arc(ps.x, ps.y, 3, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // keyframe points (endpoints are drawn hollow to signal they're x-locked)
+      for (let i = 0; i < curvePoints.length; i++) {
+        const s = curveToScreen(curvePoints[i]);
+        const active = (i === curveDragIndex);
+        const endpoint = (i === 0 || i === curvePoints.length - 1);
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.beginPath(); ctx.arc(s.x, s.y, active ? 15 : 11, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = endpoint ? '#101012' : accent;
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(s.x, s.y, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      }
+    }
+
+    // --- Curve editor interaction ---
+    let curveDragIndex = -1;
+
+    function sortCurvePoints() { curvePoints.sort((a, b) => a.x - b.x); }
+    function markCustom() { curvePresetSelect.value = 'custom'; }
+    function refreshCurve() { buildCurveLUT(); drawCurveEditor(); }
+
+    function curvePointerPos(e) {
+      const rect = curveCanvas.getBoundingClientRect();
+      const scaleX = curveCanvas.width / rect.width;
+      const scaleY = curveCanvas.height / rect.height;
+      const sx = (e.clientX - rect.left) * scaleX;
+      const sy = (e.clientY - rect.top) * scaleY;
+      const W = curveCanvas.width, H = curveCanvas.height;
+      return {
+        sx, sy,
+        nx: clamp01((sx - CURVE_PAD) / (W - 2 * CURVE_PAD)),
+        ny: clamp01(((H - CURVE_PAD) - sy) / (H - 2 * CURVE_PAD))
+      };
+    }
+
+    function nearestPoint(p) {
+      let best = -1, bestDist = Infinity;
+      for (let i = 0; i < curvePoints.length; i++) {
+        const s = curveToScreen(curvePoints[i]);
+        const d = Math.hypot(s.x - p.sx, s.y - p.sy);
+        if (d < bestDist) { bestDist = d; best = i; }
+      }
+      return { index: best, dist: bestDist };
+    }
+
+    function applyDrag(p) {
+      const i = curveDragIndex;
+      if (i < 0) return;
+      const pt = curvePoints[i];
+      pt.y = p.ny;
+      // Endpoints keep their x locked; inner points move in x, clamped between neighbours.
+      if (i > 0 && i < curvePoints.length - 1) {
+        const lo = curvePoints[i-1].x + MIN_X_GAP;
+        const hi = curvePoints[i+1].x - MIN_X_GAP;
+        pt.x = Math.max(lo, Math.min(hi, p.nx));
+      }
+      refreshCurve();
+    }
+
+    curveCanvas.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+      if (e.button === 2) return; // right-click is handled by contextmenu (remove)
+      const p = curvePointerPos(e);
+      const hit = nearestPoint(p);
+      if (hit.index >= 0 && hit.dist <= HIT_RADIUS) {
+        curveDragIndex = hit.index;
+        curveCanvas.setPointerCapture(e.pointerId);
+        markCustom();
+        applyDrag(p);
+      }
+    });
+
+    curveCanvas.addEventListener('pointermove', (e) => {
+      if (curveDragIndex < 0) return;
+      applyDrag(curvePointerPos(e));
+    });
+
+    function endCurveDrag(e) {
+      if (curveDragIndex >= 0) {
+        curveDragIndex = -1;
+        try { curveCanvas.releasePointerCapture(e.pointerId); } catch (err) {}
+      }
+    }
+    curveCanvas.addEventListener('pointerup', endCurveDrag);
+    curveCanvas.addEventListener('pointercancel', endCurveDrag);
+
+    // Double-click empty space to add a keyframe.
+    curveCanvas.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      const p = curvePointerPos(e);
+      const hit = nearestPoint(p);
+      if (hit.index >= 0 && hit.dist <= HIT_RADIUS) return; // don't stack on an existing point
+      curvePoints.push({ x: clamp01(p.nx), y: clamp01(p.ny) });
+      sortCurvePoints();
+      markCustom();
+      refreshCurve();
+    });
+
+    // Right-click a point to remove it (endpoints can't be removed).
+    curveCanvas.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const p = curvePointerPos(e);
+      const hit = nearestPoint(p);
+      if (hit.index > 0 && hit.index < curvePoints.length - 1 && hit.dist <= HIT_RADIUS) {
+        curvePoints.splice(hit.index, 1);
+        markCustom();
+        refreshCurve();
+      }
+    });
+
+    // Wave preset selector loads a fresh set of keyframes.
+    function applyPreset(name) {
+      curvePoints = clonePreset(name);
+      sortCurvePoints();
+      refreshCurve();
+    }
+    curvePresetSelect.addEventListener('change', () => {
+      if (curvePresetSelect.value !== 'custom') applyPreset(curvePresetSelect.value);
+    });
+
+    // ON/OFF toggle controls whether the effect is applied.
+    function setCurveEnabled(on) {
+      curveEnabled = on;
+      curveOnOff.classList.toggle('active', on);
+      curveOnOff.textContent = on ? 'ON' : 'OFF';
+      curveOnOff.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    curveOnOff.addEventListener('click', () => setCurveEnabled(!curveEnabled));
+
+    // The icon button opens/closes the floating editor (independent of ON/OFF).
+    let curveAutoEnabledOnce = false;
+    function openCurvePanel() {
+      curvePanel.classList.remove('hidden');
+      curveToggleBtn.classList.add('active');
+      // Convenience: the very first time the editor is opened, switch scaling ON.
+      if (!curveAutoEnabledOnce) {
+        curveAutoEnabledOnce = true;
+        setCurveEnabled(true);
+      }
+      refreshCurve();
+    }
+    function closeCurvePanel() {
+      curvePanel.classList.add('hidden');
+      curveToggleBtn.classList.remove('active');
+    }
+    curveToggleBtn.addEventListener('click', () => {
+      if (curvePanel.classList.contains('hidden')) openCurvePanel();
+      else closeCurvePanel();
+    });
+    curveCloseBtn.addEventListener('click', closeCurvePanel);
+    curveParamSelect.addEventListener('change', () => { curveParam = curveParamSelect.value; });
+
+    // Make the floating panel draggable by its header.
+    (function () {
+      let dragging = false, sx = 0, sy = 0, startLeft = 0, startTop = 0;
+      curvePanelHeader.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return; // let the min/close buttons work
+        dragging = true;
+        const rect = curvePanel.getBoundingClientRect();
+        startLeft = rect.left; startTop = rect.top;
+        sx = e.clientX; sy = e.clientY;
+        curvePanel.style.left = startLeft + 'px';
+        curvePanel.style.top = startTop + 'px';
+        curvePanel.style.right = 'auto';
+        curvePanelHeader.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      curvePanelHeader.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        let nl = startLeft + (e.clientX - sx);
+        let nt = startTop + (e.clientY - sy);
+        nl = Math.max(0, Math.min(window.innerWidth - 60, nl));
+        nt = Math.max(0, Math.min(window.innerHeight - 40, nt));
+        curvePanel.style.left = nl + 'px';
+        curvePanel.style.top = nt + 'px';
+      });
+      function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        try { curvePanelHeader.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+      curvePanelHeader.addEventListener('pointerup', endDrag);
+      curvePanelHeader.addEventListener('pointercancel', endDrag);
+    })();
+
+    buildCurveLUT();
+
+    // --- Sync Toggle Logic ---
+    syncBtn.addEventListener('click', () => {
+      isSyncActive = !isSyncActive;
+      syncBtn.classList.toggle('active', isSyncActive);
+    });
+
+    // --- Export Video Logic ---
+    let mediaRecorder;
+    let recordedChunks = [];
+    let isRecording = false;
+    let recordingTickCount = 0;
+    let requiredTicks = 0;
+
+    exportBtn.addEventListener('click', () => {
+      if (isRecording) return; 
+      
+      const activeFrames = parseInt(framesSlider.value, 10);
+      const speed = parseFloat(speedSlider.value);
+      requiredTicks = Math.ceil(activeFrames / speed);
+      recordingTickCount = 0;
+      
+      playheadPos = 0;
+      currentFrame = 0;
+      isPlaying = true;
+      editMode = false;
+      updateEditModeUI();
+      
+      const stream = canvas.captureStream(60); 
+      const mimeTypes = ['video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+      const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+      
+      mediaRecorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5000000 });
+      recordedChunks = [];
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recordedChunks.push(e.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(recordedChunks, { type: mimeType || 'video/webm' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `echodoodle-loop.${mimeType.includes('mp4') ? 'mp4' : 'webm'}`;
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        exportBtn.innerText = 'Export';
+        exportBtn.classList.remove('recording');
+        isRecording = false;
+      };
+      
+      exportBtn.innerText = 'Rec...';
+      exportBtn.classList.add('recording');
+      isRecording = true;
+      mediaRecorder.start();
+    });
+
+    // --- Save / Load ---
+    const rawBtn = document.getElementById('raw-btn');
+    const importBtn = document.getElementById('import-btn');
+    const importFile = document.getElementById('import-file');
+
+    function roundTo(n, p) { const f = Math.pow(10, p); return Math.round(n * f) / f; }
+
+    function serializeProject() {
+      const frames = parseInt(framesSlider.value, 10);
+      const fd = [];
+      for (let i = 0; i < frames; i++) {
+        const src = frameData[i] || [];
+        const out = new Array(src.length);
+        for (let j = 0; j < src.length; j += floatsPerPoint) {
+          out[j]     = roundTo(src[j], 1);      // x
+          out[j + 1] = roundTo(src[j + 1], 1);  // y
+          out[j + 2] = roundTo(src[j + 2], 4);  // r
+          out[j + 3] = roundTo(src[j + 3], 4);  // g
+          out[j + 4] = roundTo(src[j + 4], 4);  // b
+          out[j + 5] = roundTo(src[j + 5], 2);  // size
+          out[j + 6] = roundTo(src[j + 6], 3);  // pBlur
+          out[j + 7] = roundTo(src[j + 7], 3);  // pSoft
+          out[j + 8] = roundTo(src[j + 8], 3);  // pAlpha
+        }
+        fd.push(out);
+      }
+      const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#0a0a0c';
+      return {
+        app: 'echoDoodle', version: 1,
+        refW: canvas.width, refH: canvas.height,
+        floatsPerPoint: floatsPerPoint,
+        frameCount: frames,
+        speed: parseFloat(speedSlider.value),
+        trail: parseInt(trailSlider.value, 10),
+        opacity: parseFloat(opacitySlider.value),
+        blur: parseFloat(blurSlider.value),
+        size: parseFloat(sizeSlider.value),
+        softness: parseFloat(softSlider.value),
+        color: colorPicker.value,
+        background: bg,
+        frameData: fd
+      };
+    }
+
+    function downloadBlob(filename, blob) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    rawBtn.addEventListener('click', () => {
+      const json = JSON.stringify(serializeProject());
+      downloadBlob('echodoodle.json', new Blob([json], { type: 'application/json' }));
+    });
+
+    importBtn.addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try { applyProject(JSON.parse(reader.result)); }
+        catch (err) { alert('Could not read that file: ' + err.message); }
+        importFile.value = '';
+      };
+      reader.readAsText(file);
+    });
+
+    // --- Top menu bar: File dropdown open/close ---
+    (function () {
+      const fileMenu = document.getElementById('file-menu');
+      const fileBtn = document.getElementById('file-menu-btn');
+      const fileDropdown = fileMenu.querySelector('.menu-dropdown');
+      function closeFile() {
+        fileMenu.classList.remove('open');
+        fileDropdown.classList.add('hidden');
+        fileBtn.setAttribute('aria-expanded', 'false');
+      }
+      fileBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = fileMenu.classList.toggle('open');
+        fileDropdown.classList.toggle('hidden', !open);
+        fileBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      // Choosing an item (or clicking anywhere else / Export) closes the menu.
+      fileDropdown.querySelectorAll('.menu-item').forEach(b => b.addEventListener('click', closeFile));
+      document.addEventListener('click', (e) => { if (!fileMenu.contains(e.target)) closeFile(); });
+      exportBtn.addEventListener('click', closeFile);
+    })();
+
+    function setSliderValue(el, v) {
+      v = Number(v);
+      if (!Number.isFinite(v)) return;
+      const min = parseFloat(el.min), max = parseFloat(el.max);
+      el.value = Math.max(min, Math.min(max, v));
+    }
+
+    // Coerce any imported value to a finite number (defends against NaN / strings
+    // reaching WebGL, which would corrupt geometry).
+    function num(v, fallback) {
+      v = Number(v);
+      return Number.isFinite(v) ? v : (fallback || 0);
+    }
+    function clampCh(v) { return Math.max(0, Math.min(1, num(v, 0))); }
+    // Only accept strict hex colors; ignore anything else.
+    function sanitizeColor(c) {
+      return (typeof c === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c.trim()))
+        ? c.trim() : null;
+    }
+
+    // Guard against absurdly large files crashing the tab.
+    const MAX_TOTAL_FLOATS = 6000000;
+
+    function applyProject(p) {
+      if (!p || p.app !== 'echoDoodle' || !Array.isArray(p.frameData)) {
+        alert('That does not look like an echoDoodle file.');
+        return;
+      }
+      const frames = Math.max(10, Math.min(MAX_FRAMES, p.frameCount | 0));
+
+      setSliderValue(framesSlider, frames);
+      valFrames.innerText = frames;
+      trailSlider.max = frames;
+      setSliderValue(speedSlider, p.speed);
+      setSliderValue(trailSlider, p.trail);
+      setSliderValue(opacitySlider, p.opacity);
+      setSliderValue(blurSlider, p.blur);
+      setSliderValue(sizeSlider, p.size);
+      setSliderValue(softSlider, p.softness);
+      const safeColor = sanitizeColor(p.color);
+      if (safeColor) {
+        colorPicker.value = safeColor;
+        brushRgb = hexToRgb(colorPicker.value);
+        bottomPanel.style.setProperty('--playhead-color', colorPicker.value);
+      }
+
+      valSpeed.innerText = parseFloat(speedSlider.value).toFixed(1) + 'x';
+      valTrail.innerText = trailSlider.value;
+      buildTimeline(frames);
+      document.querySelectorAll('input[type="range"]').forEach(updateRangeFill);
+
+      // Contain-fit the stored geometry into the current canvas.
+      const refW = num(p.refW, 0) > 0 ? num(p.refW) : canvas.width;
+      const refH = num(p.refH, 0) > 0 ? num(p.refH) : canvas.height;
+      const S = Math.min(canvas.width / refW, canvas.height / refH);
+      const ox = (canvas.width - refW * S) / 2;
+      const oy = (canvas.height - refH * S) / 2;
+      const fpp = Math.max(6, (p.floatsPerPoint | 0) || 9);
+
+      let totalFloats = 0;
+      let truncated = false;
+      for (let i = 0; i < MAX_FRAMES; i++) { frameData[i] = []; frameNeedsUpdate[i] = true; }
+      for (let i = 0; i < p.frameData.length && i < MAX_FRAMES && !truncated; i++) {
+        const src = Array.isArray(p.frameData[i]) ? p.frameData[i] : [];
+        const dst = [];
+        for (let j = 0; j + fpp <= src.length; j += fpp) {
+          if (totalFloats + 9 > MAX_TOTAL_FLOATS) { truncated = true; break; }
+          dst.push(
+            ox + num(src[j]) * S, oy + num(src[j + 1]) * S,
+            clampCh(src[j + 2]), clampCh(src[j + 3]), clampCh(src[j + 4]),
+            Math.max(0, num(src[j + 5])) * S,
+            Math.max(0, num(src[j + 6])), Math.max(0, num(src[j + 7])),
+            num(src[j + 8], 1)
+          );
+          totalFloats += 9;
+        }
+        frameData[i] = dst;
+        frameNeedsUpdate[i] = true;
+      }
+      // Loaded artwork becomes the free-draw layer; pen paths start fresh.
+      for (let i = 0; i < MAX_FRAMES; i++) freeData[i] = frameData[i].slice();
+      penPaths = [];
+      if (typeof clearPen === 'function') clearPen();
+      if (truncated) alert('This file was unusually large, so some drawing data was skipped.');
+
+      firstParticle = null;
+      firstParticleFrame = null;
+      hasCompletedFirstCycle = true;
+      editMode = false;
+      isPlaying = true;
+      playheadPos = 0;
+      currentFrame = 0;
+      updateEditModeUI();
+      updatePlayBtn();
+    }
+
+    // --- Quantized Timeline Setup ---
+    function buildTimeline(totalFrames) {
+      timelineContainer.innerHTML = '';
+      frameSteps = [];
+      for (let i = 0; i < totalFrames; i++) {
+        const step = document.createElement('div');
+        step.className = 'frame-step';
+        const frameIndex = i;
+        step.addEventListener('click', () => {
+          // Enter per-frame edit mode: park the playhead on this frame so the
+          // user can draw directly onto it and build the animation frame by frame.
+          editMode = true;
+          isPlaying = false;
+          playheadPos = frameIndex;
+          currentFrame = frameIndex;
+          updateEditModeUI();
+          updatePlayBtn();
+        });
+        timelineContainer.appendChild(step);
+        frameSteps.push(step);
+      }
+    }
+    
+    buildTimeline(parseInt(framesSlider.value, 10));
+
+    // Prevent drawing when interacting with UI Panel
+    bottomPanel.addEventListener('pointerdown', e => e.stopPropagation());
+
+    framesSlider.addEventListener('input', (e) => {
+      let f = parseInt(e.target.value, 10);
+      valFrames.innerText = f;
+      
+      trailSlider.max = f;
+      let currentTrail = parseInt(trailSlider.value, 10);
+      if (currentTrail > f) {
+        trailSlider.value = f;
+        valTrail.innerText = f;
+      }
+      updateRangeFill(trailSlider);
+      buildTimeline(f);
+    });
+    
+    speedSlider.addEventListener('input', (e) => valSpeed.innerText = parseFloat(e.target.value).toFixed(1) + 'x');
+    trailSlider.addEventListener('input', (e) => valTrail.innerText = e.target.value);
+
+    // --- Slider fill (shows filled portion of the track) ---
+    function updateRangeFill(el) {
+      const min = parseFloat(el.min) || 0;
+      const max = parseFloat(el.max) || 100;
+      const val = parseFloat(el.value);
+      const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
+      el.style.setProperty('--fill', pct + '%');
+    }
+    const allSliders = document.querySelectorAll('input[type="range"]');
+    allSliders.forEach((el) => {
+      updateRangeFill(el);
+      el.addEventListener('input', () => updateRangeFill(el));
+    });
+
+    // Sync the value labels to the sliders' actual default values on load.
+    function syncValueLabels() {
+      valFrames.innerText = parseInt(framesSlider.value, 10);
+      valSpeed.innerText = parseFloat(speedSlider.value).toFixed(1) + 'x';
+      valTrail.innerText = trailSlider.value;
+    }
+    syncValueLabels();
+
+    let isDrawing = false;
+    let activePointerId = null;
+    
+    // Stroke Interpolation Tracking
+    let targetX = 0, targetY = 0;
+    let currentX = 0, currentY = 0;
+    let lastSpatialX = 0, lastSpatialY = 0;
+    
+    function hexToRgb(hex) {
+      let bigint = parseInt(hex.slice(1), 16);
+      return [(bigint >> 16 & 255) / 255, (bigint >> 8 & 255) / 255, (bigint & 255) / 255];
+    }
+    let brushRgb = hexToRgb(colorPicker.value);
+    bottomPanel.style.setProperty('--playhead-color', colorPicker.value);
+    
+    colorPicker.addEventListener('input', (e) => {
+      brushRgb = hexToRgb(e.target.value);
+      bottomPanel.style.setProperty('--playhead-color', e.target.value);
+    });
+    
+    document.getElementById('clear-btn').addEventListener('click', () => {
+      for(let i=0; i<MAX_FRAMES; i++) {
+        frameData[i] = [];
+        freeData[i] = [];
+        frameNeedsUpdate[i] = true;
+      }
+      penPaths = [];
+      if (typeof clearPen === 'function') clearPen();
+      firstParticle = null;
+      firstParticleFrame = null;
+      hasCompletedFirstCycle = false;
+      isPlaying = false;
+      playheadPos = 0;
+      currentFrame = 0;
+    });
+
+    // Curve Scaling is a BRUSH effect: the modulation is evaluated at draw time
+    // (based on the frame the point lands on) and baked into the stored point.
+    // Editing the curve afterwards never changes what's already on the canvas.
+    // Modulation sampled at a continuous loop position x (0..1).
+    function computeModAtX(x, enabled, param, lut) {
+      let sizeMul = 1.0, noiseAmt = 0.0, blurAdd = 0.0, softAdd = 0.0, alphaMul = 1.0;
+      if (enabled && lut) {
+        const cv = sampleLUT(lut, x);
+        switch (param) {
+          case 'size':     sizeMul = 0.15 + cv * 1.85; break;
+          case 'opacity':  alphaMul = 0.1 + cv * 0.9;  break;
+          case 'blur':     blurAdd = cv * 6.0;         break;
+          case 'noise':    noiseAmt = cv * 35.0 * dpr; break;
+          case 'softness': softAdd = cv;               break;
+        }
+      }
+      return { sizeMul, noiseAmt, blurAdd, softAdd, alphaMul };
+    }
+
+    function computeMod(frameIndex, enabled, param, lut) {
+      const af = parseInt(framesSlider.value, 10);
+      return computeModAtX(af > 0 ? (frameIndex / af) : 0, enabled, param, lut);
+    }
+
+    function brushModForFrame(frameIndex) {
+      return computeMod(frameIndex, curveEnabled, curveParam, curveLUT);
+    }
+
+    function makeBakedPoint(x, y, frameIndex) {
+      const baseSize = parseFloat(sizeSlider.value) * dpr;
+      const baseSoft = parseFloat(softSlider.value); // brush softness baked per point
+      const m = brushModForFrame(frameIndex);
+      let px = x, py = y;
+      if (m.noiseAmt > 0) {
+        px += (Math.random() - 0.5) * m.noiseAmt;
+        py += (Math.random() - 0.5) * m.noiseAmt;
+      }
+      return [px, py, brushRgb[0], brushRgb[1], brushRgb[2], baseSize * m.sizeMul, m.blurAdd, baseSoft + m.softAdd, m.alphaMul];
+    }
+
+    // Free-hand point: written to BOTH the live buffer and the free-draw store
+    // (so re-baking pen paths never wipes hand-drawn strokes).
+    function addFreePoint(frameIndex, x, y) {
+      const p = makeBakedPoint(x, y, frameIndex);
+      for (let i = 0; i < p.length; i++) { frameData[frameIndex].push(p[i]); freeData[frameIndex].push(p[i]); }
+      frameNeedsUpdate[frameIndex] = true;
+    }
+
+    function addPoint(x, y) {
+      if (!firstParticle) {
+        const size = parseFloat(sizeSlider.value) * dpr;
+        firstParticle = [x, y, brushRgb[0], brushRgb[1], brushRgb[2], size, 0.0, 0.0, 1.0];
+        firstParticleFrame = currentFrame;
+        hasCompletedFirstCycle = false;
+      }
+
+      addFreePoint(currentFrame, x, y);
+    }
+
+    // --- POINTER EVENTS ---
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'touch') return; 
+      if (penMode) { penPointerDown(e); return; }
+      if (activePointerId !== null) return; 
+
+      activePointerId = e.pointerId;
+      isDrawing = true;
+      strokeRecordingActive = true;
+      hideBrushPreview();
+
+      if (editMode) {
+        // Per-frame edit: keep the playhead parked so the stroke lands on the
+        // currently selected frame only. The loop stays paused.
+        isPlaying = false;
+      } else {
+        isPlaying = true;
+        if (isSyncActive) {
+          playheadPos = 0;
+          currentFrame = 0;
+          firstParticle = null;
+          firstParticleFrame = null;
+          hasCompletedFirstCycle = false;
+        }
+      }
+
+      targetX = currentX = lastSpatialX = e.clientX * dpr;
+      targetY = currentY = lastSpatialY = e.clientY * dpr;
+      addPoint(currentX, currentY);
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isDrawing || e.pointerId !== activePointerId) return; 
+      targetX = e.clientX * dpr;
+      targetY = e.clientY * dpr;
+    });
+
+    function endStroke(e) {
+      if (e.pointerId === activePointerId) {
+        isDrawing = false;
+        strokeRecordingActive = false;
+        activePointerId = null;
+        if (e.pointerType !== 'touch') showBrushPreview(e.clientX, e.clientY);
+      }
+    }
+
+    window.addEventListener('pointerup', endStroke);
+    window.addEventListener('pointercancel', endStroke);
+
+    // --- Brush size/color preview ring (desktop, before drawing) ---
+    const brushPreview = document.getElementById('brush-preview');
+    function showBrushPreview(cx, cy) {
+      // On-screen diameter matches the drawn dab (base size is in CSS px).
+      const d = Math.max(2, parseFloat(sizeSlider.value));
+      const col = colorPicker.value;
+      brushPreview.style.width = d + 'px';
+      brushPreview.style.height = d + 'px';
+      brushPreview.style.left = cx + 'px';
+      brushPreview.style.top = cy + 'px';
+      brushPreview.style.borderColor = col;
+      brushPreview.style.background = col + '30'; // ~19% alpha fill
+      brushPreview.style.display = 'block';
+    }
+    function hideBrushPreview() { brushPreview.style.display = 'none'; }
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch') return;
+      if (penMode) { penPointerMove(e); return; }
+      if (isDrawing) { hideBrushPreview(); return; }
+      showBrushPreview(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('pointerleave', () => {
+      hideBrushPreview();
+      if (penMode) { penHoverPos = null; drawPenOverlay(); }
+    });
+    // Keep the ring in sync when size/color change while hovering.
+    sizeSlider.addEventListener('input', () => {
+      if (brushPreview.style.display === 'block') {
+        brushPreview.style.width = Math.max(2, parseFloat(sizeSlider.value)) + 'px';
+        brushPreview.style.height = brushPreview.style.width;
+      }
+    });
+    colorPicker.addEventListener('input', () => {
+      if (brushPreview.style.display === 'block') {
+        brushPreview.style.borderColor = colorPicker.value;
+        brushPreview.style.background = colorPicker.value + '30';
+      }
+    });
+
+    // ================= Beginner Pen Tool (auto-smoothed path) =================
+    const penOverlay = document.getElementById('pen-overlay');
+    const penCtx = penOverlay.getContext('2d');
+    const toolTabs = document.getElementById('tool-tabs');
+    const toolTabBtns = toolTabs.querySelectorAll('.tool-tab');
+    const penSmoothSlider = document.getElementById('pen-smooth');
+    const valSmooth = document.getElementById('val-smooth');
+    const penSmoothGroup = document.getElementById('pen-smooth-group');
+
+    // Tool cycles Brush -> Pen -> Edit. penMode = any pen tool active.
+    let penTool = 'brush';
+    let penMode = false;        // penTool !== 'brush'
+    let penEditing = false;     // penTool === 'edit' (adjust existing anchors only)
+    let penAnchors = [];        // active path anchors, {x,y} in CSS px
+    let penDragIndex = -1;
+    let penHoverPos = null;     // {x,y} in CSS px
+    let penClosed = false;
+    let penSmoothness = parseInt(penSmoothSlider.value, 10) / 100;
+    let penEditSettings = null; // {color,size,soft,curve} for the active path
+    let penEditBackup = null;   // original of a committed path being re-edited (for cancel)
+    const PEN_HIT = 12;
+
+    // Catmull-Rom point blended toward the straight line by smoothness s (0..1).
+    function penCR(p0, p1, p2, p3, t, s) {
+      const lx = p1.x + (p2.x - p1.x) * t;
+      const ly = p1.y + (p2.y - p1.y) * t;
+      const t2 = t * t, t3 = t2 * t;
+      const cx = 0.5 * ((2*p1.x) + (-p0.x + p2.x)*t + (2*p0.x - 5*p1.x + 4*p2.x - p3.x)*t2 + (-p0.x + 3*p1.x - 3*p2.x + p3.x)*t3);
+      const cy = 0.5 * ((2*p1.y) + (-p0.y + p2.y)*t + (2*p0.y - 5*p1.y + 4*p2.y - p3.y)*t2 + (-p0.y + 3*p1.y - 3*p2.y + p3.y)*t3);
+      return { x: lx + (cx - lx) * s, y: ly + (cy - ly) * s };
+    }
+
+    // Dense polyline through the anchors (smooth spline).
+    function penDensePath(pts, closed, s) {
+      const n = pts.length;
+      if (n < 2) return pts.map(p => ({ x: p.x, y: p.y }));
+      const get = (i) => closed ? pts[((i % n) + n) % n] : pts[Math.max(0, Math.min(n - 1, i))];
+      const out = [];
+      const segCount = closed ? n : n - 1;
+      const SUB = 24;
+      for (let i = 0; i < segCount; i++) {
+        const p0 = get(i-1), p1 = get(i), p2 = get(i+1), p3 = get(i+2);
+        for (let j = 0; j < SUB; j++) out.push(penCR(p0, p1, p2, p3, j / SUB, s));
+      }
+      out.push(closed ? { x: pts[0].x, y: pts[0].y } : { x: pts[n-1].x, y: pts[n-1].y });
+      return out;
+    }
+
+    // Resample a polyline at fixed arc-length spacing.
+    function penResample(poly, spacing) {
+      if (poly.length === 0) return [];
+      const out = [{ x: poly[0].x, y: poly[0].y }];
+      let acc = 0;
+      for (let i = 1; i < poly.length; i++) {
+        let ax = poly[i-1].x, ay = poly[i-1].y;
+        const bx = poly[i].x, by = poly[i].y;
+        let seg = Math.hypot(bx - ax, by - ay);
+        while (acc + seg >= spacing && seg > 1e-6) {
+          const tt = (spacing - acc) / seg;
+          ax = ax + (bx - ax) * tt;
+          ay = ay + (by - ay) * tt;
+          out.push({ x: ax, y: ay });
+          seg = Math.hypot(bx - ax, by - ay);
+          acc = 0;
+        }
+        acc += seg;
+      }
+      return out;
+    }
+
+    function drawPenOverlay() {
+      const ctx = penCtx;
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      if (!penMode) return;
+      const col = (penEditSettings && penEditSettings.color) || colorPicker.value;
+      const size = Math.max(2, (penEditSettings && penEditSettings.size) || parseFloat(sizeSlider.value));
+
+      const HL = '#ffd54a'; // highlight/snap accent (gold)
+
+      // Which anchor is under the cursor, for highlight + snap feedback.
+      let hoverActiveIdx = -1;
+      if (penHoverPos && penDragIndex < 0 && penAnchors.length) {
+        const h = penNearest(penHoverPos.x, penHoverPos.y);
+        if (h.idx >= 0 && h.dist <= PEN_HIT) hoverActiveIdx = h.idx;
+      }
+      let hoverCommitted = null;
+      if (penEditing && penHoverPos && penDragIndex < 0 && !penAnchors.length) {
+        const c = penNearestCommitted(penHoverPos.x, penHoverPos.y);
+        if (c.pi >= 0 && c.dist <= PEN_HIT) hoverCommitted = c;
+      }
+
+      // Faint handles on committed paths so the user sees they can be edited.
+      // The anchor nearest the cursor lights up (snap target) in Edit mode.
+      if (!penAnchors.length) {
+        for (let pi = 0; pi < penPaths.length; pi++) {
+          const anchors = penPaths[pi].anchors;
+          for (let ai = 0; ai < anchors.length; ai++) {
+            const a = anchors[ai];
+            const hot = hoverCommitted && hoverCommitted.pi === pi && hoverCommitted.ai === ai;
+            if (hot) {
+              ctx.beginPath(); ctx.arc(a.x, a.y, 11, 0, Math.PI * 2);
+              ctx.strokeStyle = HL; ctx.lineWidth = 2; ctx.stroke();
+            }
+            ctx.beginPath(); ctx.arc(a.x, a.y, hot ? 6.5 : 4, 0, Math.PI * 2);
+            ctx.fillStyle = hot ? HL : 'rgba(255,255,255,0.28)';
+            ctx.strokeStyle = hot ? '#000' : 'rgba(0,0,0,0.55)'; ctx.lineWidth = hot ? 2 : 1.5;
+            ctx.fill(); ctx.stroke();
+          }
+        }
+      }
+
+      // Hovering the first (terminal) anchor offers to close the loop (pen only).
+      const hoverClose = (!penEditing && !penClosed && penAnchors.length >= 3 && penHoverPos && penDragIndex < 0 &&
+        Math.hypot(penAnchors[0].x - penHoverPos.x, penAnchors[0].y - penHoverPos.y) <= PEN_HIT);
+
+      // Path preview (append the hovered point as a temp endpoint while open)
+      let pts = penAnchors.slice();
+      if (!penEditing && !penClosed && penDragIndex < 0 && penHoverPos && !hoverClose && hoverActiveIdx < 0) {
+        pts = pts.concat([penHoverPos]);
+      }
+      if (pts.length >= 2) {
+        const dense = penDensePath(pts, penClosed, penSmoothness);
+        ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.strokeStyle = col + '55'; ctx.lineWidth = size;        // brush-width band
+        ctx.beginPath();
+        dense.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+        ctx.stroke();
+        ctx.strokeStyle = col; ctx.lineWidth = 1.5;                // crisp centerline
+        ctx.beginPath();
+        dense.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+        ctx.stroke();
+      }
+
+      // Active anchor handles (first anchor is white = the terminal point).
+      // The one under the cursor lights up with a snap ring.
+      for (let i = 0; i < penAnchors.length; i++) {
+        const a = penAnchors[i];
+        const hot = (i === hoverActiveIdx);
+        if (hot && i !== penDragIndex) {
+          ctx.beginPath(); ctx.arc(a.x, a.y, 11, 0, Math.PI * 2);
+          ctx.strokeStyle = HL; ctx.lineWidth = 2; ctx.stroke();
+        }
+        const r = (i === penDragIndex) ? 7 : (hot ? 6.5 : 5);
+        ctx.beginPath(); ctx.arc(a.x, a.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = hot ? HL : ((i === 0) ? '#ffffff' : col);
+        ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+        ctx.fill(); ctx.stroke();
+      }
+
+      // "Close path" affordance ring around the terminal point on hover.
+      if (hoverClose) {
+        const a = penAnchors[0];
+        ctx.beginPath(); ctx.arc(a.x, a.y, 10, 0, Math.PI * 2);
+        ctx.strokeStyle = '#00ff41'; ctx.lineWidth = 2.5; ctx.stroke();
+      }
+
+      // Brush-size ring at the cursor (pen placing only, not while snapping).
+      if (!penEditing && penHoverPos && penDragIndex < 0 && !hoverClose && hoverActiveIdx < 0) {
+        ctx.beginPath(); ctx.arc(penHoverPos.x, penHoverPos.y, size / 2, 0, Math.PI * 2);
+        ctx.strokeStyle = col; ctx.lineWidth = 1.25; ctx.stroke();
+      }
+    }
+
+    // Nearest anchor within the ACTIVE path.
+    function penNearest(x, y) {
+      let idx = -1, best = Infinity;
+      for (let i = 0; i < penAnchors.length; i++) {
+        const d = Math.hypot(penAnchors[i].x - x, penAnchors[i].y - y);
+        if (d < best) { best = d; idx = i; }
+      }
+      return { idx, dist: best };
+    }
+
+    // Nearest anchor across all COMMITTED paths (for re-editing).
+    function penNearestCommitted(x, y) {
+      let pi = -1, ai = -1, best = Infinity;
+      for (let p = 0; p < penPaths.length; p++) {
+        const anchors = penPaths[p].anchors;
+        for (let i = 0; i < anchors.length; i++) {
+          const d = Math.hypot(anchors[i].x - x, anchors[i].y - y);
+          if (d < best) { best = d; pi = p; ai = i; }
+        }
+      }
+      return { pi, ai, dist: best };
+    }
+
+    // Rebuild the live buffers from the free-draw layer + every committed path.
+    function bakePathAcrossFrames(path) {
+      const activeFrames = parseInt(framesSlider.value, 10);
+      const devAnchors = path.anchors.map(p => ({ x: p.x * dpr, y: p.y * dpr }));
+      const dense = penDensePath(devAnchors, path.closed, path.smoothness);
+      const size = Math.max(2, path.size);
+      const dabs = penResample(dense, Math.max(1, size * dpr * 0.15));
+      const K = dabs.length;
+      if (K < 1) return;
+      const rgb = hexToRgb(path.color);
+      const dsize = size * dpr;
+      const cs = path.curve || {};
+      for (let k = 0; k < K; k++) {
+        const prog = K > 1 ? k / (K - 1) : 0;
+        let f = Math.floor(prog * activeFrames);
+        if (f >= activeFrames) f = activeFrames - 1;
+        // Sample the curve at the dab's continuous position along the path (prog)
+        // rather than its quantized frame, so scaling varies smoothly instead of
+        // stepping at each frame boundary. (Frozen per-path in path.curve.)
+        const m = computeModAtX(prog, cs.enabled, cs.param, cs.lut);
+        let px = dabs[k].x, py = dabs[k].y;
+        if (m.noiseAmt > 0) { px += (Math.random() - 0.5) * m.noiseAmt; py += (Math.random() - 0.5) * m.noiseAmt; }
+        frameData[f].push(px, py, rgb[0], rgb[1], rgb[2], dsize * m.sizeMul, m.blurAdd, path.soft + m.softAdd, m.alphaMul);
+        frameNeedsUpdate[f] = true;
+      }
+    }
+
+    function rebakePen() {
+      for (let f = 0; f < MAX_FRAMES; f++) { frameData[f] = freeData[f].slice(); frameNeedsUpdate[f] = true; }
+      for (const path of penPaths) bakePathAcrossFrames(path);
+    }
+
+    // Pull a committed path back onto the canvas as the active, editable path.
+    function syncSmoothSlider() {
+      penSmoothSlider.value = Math.round(penSmoothness * 100);
+      valSmooth.innerText = penSmoothSlider.value;
+      updateRangeFill(penSmoothSlider);
+    }
+
+    function beginEditPath(pathIndex, anchorIndex) {
+      const path = penPaths.splice(pathIndex, 1)[0];
+      penEditBackup = path; // restore this exact object if the edit is cancelled
+      penAnchors = path.anchors.map(p => ({ x: p.x, y: p.y }));
+      penClosed = path.closed;
+      penSmoothness = path.smoothness;
+      penEditSettings = { color: path.color, size: path.size, soft: path.soft, curve: path.curve };
+      syncSmoothSlider();
+      rebakePen(); // remove it from the baked art; it now lives in the overlay
+      if (typeof anchorIndex === 'number') penDragIndex = anchorIndex;
+      drawPenOverlay();
+    }
+
+    function penPointerDown(e) {
+      if (e.button === 2) return; // removal is handled by contextmenu
+      const x = e.clientX, y = e.clientY;
+
+      // Grab an anchor on the ACTIVE path (drag it; or close it in pen mode).
+      if (penAnchors.length) {
+        const hit = penNearest(x, y);
+        if (hit.idx >= 0 && hit.dist <= PEN_HIT) {
+          if (!penEditing && hit.idx === 0 && penAnchors.length >= 3 && !penClosed) {
+            penClosed = true; drawPenOverlay(); return; // close loop (pen mode)
+          }
+          penDragIndex = hit.idx;
+          try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+          drawPenOverlay();
+          return;
+        }
+      }
+
+      if (penEditing) {
+        // EDIT mode: only adjust existing paths, never create new anchors.
+        if (!penAnchors.length) {
+          const c = penNearestCommitted(x, y);
+          if (c.pi >= 0 && c.dist <= PEN_HIT) {
+            beginEditPath(c.pi, c.ai);
+            try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+          }
+        } else {
+          // Clicking empty space finalizes the path currently being edited.
+          commitPenPath();
+        }
+        return;
+      }
+
+      // PEN mode: place a new anchor (start or extend the path).
+      if (!penClosed) {
+        if (!penAnchors.length && !penEditSettings) {
+          penEditSettings = {
+            color: colorPicker.value,
+            size: Math.max(2, parseFloat(sizeSlider.value)),
+            soft: parseFloat(softSlider.value),
+            curve: currentCurveSnapshot()
+          };
+        }
+        penAnchors.push({ x, y });
+        drawPenOverlay();
+      }
+    }
+
+    function penPointerMove(e) {
+      penHoverPos = { x: e.clientX, y: e.clientY };
+      if (penDragIndex >= 0) penAnchors[penDragIndex] = { x: e.clientX, y: e.clientY };
+      drawPenOverlay();
+    }
+
+    function penPointerUp(e) {
+      if (penDragIndex >= 0) {
+        penDragIndex = -1;
+        try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        drawPenOverlay();
+      }
+    }
+    window.addEventListener('pointerup', penPointerUp);
+    window.addEventListener('pointercancel', penPointerUp);
+
+    // Right-click removes the nearest anchor on the active path.
+    canvas.addEventListener('contextmenu', (e) => {
+      if (!penMode || !penAnchors.length) return;
+      e.preventDefault();
+      const hit = penNearest(e.clientX, e.clientY);
+      if (hit.idx >= 0 && hit.dist <= PEN_HIT) {
+        penAnchors.splice(hit.idx, 1);
+        if (penAnchors.length < 3 && penClosed) penClosed = false;
+        drawPenOverlay();
+      }
+    });
+
+    // Double-click finishes (commits) the current path.
+    canvas.addEventListener('dblclick', (e) => {
+      if (!penMode) return;
+      e.preventDefault();
+      // The two clicks of a double-click add a near-duplicate anchor; drop it.
+      if (penAnchors.length >= 2) {
+        const n = penAnchors.length;
+        if (Math.hypot(penAnchors[n-1].x - penAnchors[n-2].x, penAnchors[n-1].y - penAnchors[n-2].y) < PEN_HIT) {
+          penAnchors.pop();
+        }
+      }
+      commitPenPath();
+    });
+
+    function resetActivePen() {
+      penAnchors = []; penDragIndex = -1; penClosed = false;
+      penEditSettings = null; penEditBackup = null;
+    }
+
+    // Cancel the active path. If we were re-editing a committed path, put it back.
+    function clearPen() {
+      if (penEditBackup) { penPaths.push(penEditBackup); rebakePen(); }
+      resetActivePen();
+      penHoverPos = null;
+      drawPenOverlay();
+    }
+
+    // Finish the active path: store it as an editable path and bake it in.
+    function commitPenPath() {
+      if (penAnchors.length < 2) { clearPen(); return; }
+      const s = penEditSettings || {
+        color: colorPicker.value,
+        size: Math.max(2, parseFloat(sizeSlider.value)),
+        soft: parseFloat(softSlider.value),
+        curve: currentCurveSnapshot()
+      };
+      penPaths.push({
+        anchors: penAnchors.map(p => ({ x: p.x, y: p.y })),
+        closed: penClosed, smoothness: penSmoothness,
+        color: s.color, size: s.size, soft: s.soft,
+        curve: s.curve || currentCurveSnapshot()
+      });
+      resetActivePen();
+      rebakePen();
+      if (!penEditing) { isPlaying = true; updatePlayBtn(); } // show the draw-on reveal
+      drawPenOverlay();
+    }
+
+    // Tool tabs select the active tool: Brush / Pen / Edit.
+    function setPenTool(tool) {
+      if (tool === penTool) return;
+      if (penMode) commitPenPath();   // finalize any in-progress path first
+      penTool = tool;
+      penMode = tool !== 'brush';
+      penEditing = tool === 'edit';
+      penOverlay.style.display = penMode ? 'block' : 'none';
+      penSmoothGroup.style.display = penMode ? '' : 'none';
+      // Show the real cursor in Edit mode; Brush/Pen use their own on-canvas rings.
+      canvas.style.cursor = penEditing ? 'default' : 'none';
+      toolTabBtns.forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+      if (penMode) {
+        hideBrushPreview();
+        syncSmoothSlider();
+      }
+      if (tool === 'edit') { isPlaying = false; updatePlayBtn(); } // static canvas while editing
+      drawPenOverlay();
+    }
+
+    toolTabBtns.forEach(b => b.addEventListener('click', () => setPenTool(b.dataset.tool)));
+
+    penSmoothSlider.addEventListener('input', () => {
+      penSmoothness = parseInt(penSmoothSlider.value, 10) / 100;
+      valSmooth.innerText = penSmoothSlider.value;
+      updateRangeFill(penSmoothSlider);
+      drawPenOverlay(); // live-reshape the active path
+    });
+
+    // While in a pen tool: Enter finishes the path, Esc cancels it.
+    window.addEventListener('keydown', (e) => {
+      if (!penMode) return;
+      if (e.key === 'Enter') { e.preventDefault(); commitPenPath(); }
+      else if (e.key === 'Escape') { e.preventDefault(); clearPen(); }
+    });
+
+    // --- Scroll wheel scrubbing (only while in per-frame edit mode) ---
+    // Scroll up = step forward, scroll down = step backward. Hold Shift for 5 frames.
+    // Deltas are accumulated against a threshold so scrubbing isn't hyper-sensitive.
+    let wheelAccum = 0;
+    const WHEEL_THRESHOLD = 80;
+    window.addEventListener('wheel', (e) => {
+      if (!editMode) return;
+      e.preventDefault();
+      wheelAccum += e.deltaY;
+      if (Math.abs(wheelAccum) < WHEEL_THRESHOLD) return;
+      const activeFrames = parseInt(framesSlider.value, 10);
+      const step = e.shiftKey ? 5 : 1;
+      const dir = wheelAccum > 0 ? -1 : 1; // scroll up (negative delta) = forward
+      currentFrame = ((currentFrame + dir * step) % activeFrames + activeFrames) % activeFrames;
+      playheadPos = currentFrame;
+      wheelAccum = 0;
+    }, { passive: false });
+
+    // --- Spacebar toggles play/pause (not the panel) ---
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault(); // stop space from activating a focused button
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        if (editMode) {
+          editMode = false;
+          isPlaying = true;
+        } else {
+          isPlaying = !isPlaying;
+        }
+        updateEditModeUI();
+        updatePlayBtn();
+      }
+    });
+
+    // Wire up the interleaved vertex attributes for the currently bound buffer.
+    function bindPointAttribs() {
+      const stride = floatsPerPoint * 4;
+      gl.vertexAttribPointer(a_pos, 2, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(a_pos);
+      gl.vertexAttribPointer(a_col, 3, gl.FLOAT, false, stride, 2 * 4);
+      gl.enableVertexAttribArray(a_col);
+      gl.vertexAttribPointer(a_size, 1, gl.FLOAT, false, stride, 5 * 4);
+      gl.enableVertexAttribArray(a_size);
+      gl.vertexAttribPointer(a_pBlur, 1, gl.FLOAT, false, stride, 6 * 4);
+      gl.enableVertexAttribArray(a_pBlur);
+      gl.vertexAttribPointer(a_pSoft, 1, gl.FLOAT, false, stride, 7 * 4);
+      gl.enableVertexAttribArray(a_pSoft);
+      gl.vertexAttribPointer(a_pAlpha, 1, gl.FLOAT, false, stride, 8 * 4);
+      gl.enableVertexAttribArray(a_pAlpha);
+    }
+
+    function drawFramePoints(frameIndex, alpha, blur, sizeOffset) {
+      const data = frameData[frameIndex];
+      const numPoints = data.length / floatsPerPoint;
+      if (numPoints === 0) return;
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, frameBuffers[frameIndex]);
+      if (frameNeedsUpdate[frameIndex]) {
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW);
+        frameNeedsUpdate[frameIndex] = false;
+      }
+      bindPointAttribs();
+      gl.uniform1f(u_alpha, alpha);
+      gl.uniform1f(u_blur, blur);
+      gl.uniform1f(u_size, sizeOffset);
+      gl.drawArrays(gl.POINTS, 0, numPoints);
+    }
+
+    // --- Render Loop ---
+    function tick() {
+      const activeFrames = parseInt(framesSlider.value, 10);
+      const speed = parseFloat(speedSlider.value);
+      
+      let prevFrame = currentFrame;
+      
+      if (isPlaying) {
+        playheadPos = (playheadPos + speed) % activeFrames;
+        currentFrame = Math.floor(playheadPos);
+      }
+
+      if (firstParticleFrame !== null && prevFrame > currentFrame) {
+        hasCompletedFirstCycle = true;
+        
+        if (isSyncActive && isDrawing) {
+          strokeRecordingActive = false; 
+        }
+      }
+
+      if (isDrawing && strokeRecordingActive) {
+        currentX += (targetX - currentX) * 0.25;
+        currentY += (targetY - currentY) * 0.25;
+      }
+
+      if (isDrawing && strokeRecordingActive && currentFrame !== prevFrame) {
+        let framesElapsed = currentFrame - prevFrame;
+        if (framesElapsed < 0) framesElapsed += activeFrames;
+        
+        for(let i = 1; i <= framesElapsed; i++) {
+          let f = (prevFrame + i) % activeFrames;
+          addFreePoint(f, currentX, currentY);
+        }
+        lastSpatialX = currentX;
+        lastSpatialY = currentY;
+      }
+
+      if (isDrawing && strokeRecordingActive) {
+        const dx = currentX - lastSpatialX;
+        const dy = currentY - lastSpatialY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const brushSpacing = parseFloat(sizeSlider.value) * dpr * 0.12; 
+        
+        if (dist > brushSpacing) {
+          const steps = Math.floor(dist / brushSpacing);
+          for(let i = 1; i <= steps; i++) {
+            addPoint(lastSpatialX + dx * (i / steps), lastSpatialY + dy * (i / steps));
+          }
+          lastSpatialX = currentX;
+          lastSpatialY = currentY;
+        }
+      }
+
+      updatePlayBtn();
+
+      for (let i = 0; i < frameSteps.length; i++) {
+        if (i === currentFrame) {
+          frameSteps[i].classList.add('active');
+        } else {
+          frameSteps[i].classList.remove('active');
+        }
+      }
+
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(0.0, 0.0, 0.0, 0.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      // Keep the curve editor's playhead marker in sync (visual only).
+      if (!curvePanel.classList.contains('hidden')) drawCurveEditor();
+
+      gl.uniform2f(u_res, canvas.width, canvas.height);
+      gl.uniform1f(u_baseOp, parseFloat(opacitySlider.value));
+
+      const rawTrailVal = parseInt(trailSlider.value, 10);
+      let trailLength = Math.min(rawTrailVal, activeFrames);
+      // "Trail Length" curve scaling is a live render effect (it can't be baked
+      // per-point), scaling the trail from 0 up to the slider length over the loop.
+      if (curveEnabled && curveParam === 'trail') {
+        const cv = sampleCurve(activeFrames > 0 ? (playheadPos / activeFrames) : 0);
+        trailLength = Math.round(cv * trailLength);
+      }
+      const maxBlur = parseFloat(blurSlider.value);
+
+      if (editMode) {
+        // Onion skinning while editing a single frame: only the current frame is
+        // fully drawn; a couple of neighbouring frames appear faintly for reference.
+        const onionRange = 2;
+        for (let d = onionRange; d >= 1; d--) {
+          const fade = 0.30 * (1 - (d - 1) / onionRange) + 0.05;
+          const prevI = ((currentFrame - d) % activeFrames + activeFrames) % activeFrames;
+          const nextI = (currentFrame + d) % activeFrames;
+          drawFramePoints(prevI, fade, 0.0, 0.0);
+          if (nextI !== prevI) drawFramePoints(nextI, fade, 0.0, 0.0);
+        }
+        drawFramePoints(currentFrame, 1.0, 0.0, 0.0);
+      } else {
+        for (let dist = trailLength; dist >= 0; dist--) {
+          const frameIndex = ((currentFrame - dist) % activeFrames + activeFrames) % activeFrames;
+
+          let alpha = 1.0;
+          let blur = 0.0;
+
+          if (dist > 0 && trailLength > 0) {
+            alpha = 1.0 - (dist / trailLength);
+            blur = (dist / trailLength) * maxBlur;
+          }
+
+          drawFramePoints(frameIndex, alpha, blur, 0.0);
+        }
+      }
+
+      if (!editMode && firstParticle && !hasCompletedFirstCycle) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, ghostBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(firstParticle), gl.STREAM_DRAW);
+
+        bindPointAttribs();
+
+        gl.uniform1f(u_alpha, 0.45);
+        gl.uniform1f(u_blur, 2.0);
+        gl.uniform1f(u_size, 0.3);
+
+        gl.drawArrays(gl.POINTS, 0, 1);
+      }
+      
+      // Native Export Frame Tracking
+      if (isRecording) {
+        recordingTickCount++;
+        if (recordingTickCount >= requiredTicks && mediaRecorder.state === 'recording') {
+          mediaRecorder.stop();
+        }
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
