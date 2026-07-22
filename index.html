@@ -124,6 +124,7 @@
     #timeline-container {
       display: flex; gap: 2px; height: 22px; flex-grow: 1;
       padding: 4px 5px; border-radius: 6px;
+      touch-action: none; /* let finger-drag scrub instead of scroll */
       background: linear-gradient(180deg, #0c0c0e 0%, #17171a 100%);
       border: 2px solid; border-color: #050506 #35353a #3a3a40 #0a0a0c;
       box-shadow: inset 0 2px 6px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.25);
@@ -1453,23 +1454,54 @@
       for (let i = 0; i < totalFrames; i++) {
         const step = document.createElement('div');
         step.className = 'frame-step';
-        const frameIndex = i;
-        step.addEventListener('click', () => {
-          // Enter per-frame edit mode: park the playhead on this frame so the
-          // user can draw directly onto it and build the animation frame by frame.
-          editMode = true;
-          isPlaying = false;
-          playheadPos = frameIndex;
-          currentFrame = frameIndex;
-          updateEditModeUI();
-          updatePlayBtn();
-        });
         timelineContainer.appendChild(step);
         frameSteps.push(step);
       }
     }
     
     buildTimeline(parseInt(framesSlider.value, 10));
+
+    // --- Timeline scrubbing (click on desktop, finger-drag on iPad) ---
+    // Park the playhead on the frame under the pointer and enter per-frame edit
+    // mode so the user can draw directly onto that frame. Dragging scrubs.
+    let timelineScrubbing = false;
+    function frameFromClientX(clientX) {
+      const total = frameSteps.length;
+      if (total <= 1) return 0;
+      const rect = timelineContainer.getBoundingClientRect();
+      const padL = 5, padR = 5; // matches #timeline-container horizontal padding
+      const usable = Math.max(1, rect.width - padL - padR);
+      let t = (clientX - rect.left - padL) / usable;
+      t = Math.max(0, Math.min(1, t));
+      return Math.round(t * (total - 1));
+    }
+    function scrubTimelineTo(clientX) {
+      const idx = frameFromClientX(clientX);
+      editMode = true;
+      isPlaying = false;
+      playheadPos = idx;
+      currentFrame = idx;
+      updateEditModeUI();
+      updatePlayBtn();
+    }
+    timelineContainer.addEventListener('pointerdown', (e) => {
+      timelineScrubbing = true;
+      try { timelineContainer.setPointerCapture(e.pointerId); } catch (_) {}
+      scrubTimelineTo(e.clientX);
+      e.preventDefault();
+    });
+    timelineContainer.addEventListener('pointermove', (e) => {
+      if (!timelineScrubbing) return;
+      scrubTimelineTo(e.clientX);
+      e.preventDefault();
+    });
+    function endTimelineScrub(e) {
+      if (!timelineScrubbing) return;
+      timelineScrubbing = false;
+      try { timelineContainer.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    timelineContainer.addEventListener('pointerup', endTimelineScrub);
+    timelineContainer.addEventListener('pointercancel', endTimelineScrub);
 
     // Prevent drawing when interacting with UI Panel
     bottomPanel.addEventListener('pointerdown', e => e.stopPropagation());
