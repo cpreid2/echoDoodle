@@ -67,6 +67,8 @@
     #glcanvas {
       width: 100%; height: 100%; display: block; position: absolute; top: 0; left: 0;
       z-index: 1; background: transparent;
+      /* Finger drags draw instead of scrolling/zooming the page (iPad/iPhone) */
+      touch-action: none;
       /* Hide the system cursor so the brush preview ring acts as the cursor */
       cursor: none;
     }
@@ -246,19 +248,24 @@
     }
 
     /* The Brush title is split into three clickable tool tabs (Brush/Pen/Edit) */
-    .tool-tabs { gap: 3px; padding: 3px; }
+    .tool-tabs { gap: 4px; padding: 3px; }
     .tool-tab {
       flex: 1; cursor: pointer; user-select: none;
       font-family: var(--font-display); font-size: 11px; font-weight: 700;
       letter-spacing: 1.5px; text-transform: uppercase;
-      color: var(--ink-muted); background: transparent; border: none; border-radius: 3px;
-      padding: 4px 2px; transition: color .12s, background .12s, box-shadow .12s;
+      color: var(--ink); border-radius: 4px;
+      /* Lighter raised plastic so they clearly read as buttons */
+      background: var(--plastic-btn-hover);
+      border: 1px solid; border-color: #52535a #101014 #0c0c10 #52535a;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.14), 0 1px 2px rgba(0,0,0,0.4);
+      padding: 5px 2px; transition: color .12s, background .12s, box-shadow .12s, transform .05s;
       text-shadow: 0 1px 2px rgba(0,0,0,0.6);
     }
-    .tool-tab:hover { color: var(--ink); }
+    .tool-tab:hover { color: #fff; background: linear-gradient(180deg, #34343b 0%, #212127 100%); }
+    .tool-tab:active { transform: translateY(1px); }
     .tool-tab.active {
       color: var(--ink); background: var(--plastic-raised);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08), 0 1px 2px rgba(0,0,0,0.4);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18), inset 0 2px 4px rgba(0,0,0,0.4);
     }
     .tool-tab.active[data-tool="pen"] {
       color: var(--led-on); text-shadow: 0 0 6px var(--led-glow), 0 1px 2px rgba(0,0,0,0.6);
@@ -1581,6 +1588,19 @@
 
     let isDrawing = false;
     let activePointerId = null;
+    let activePointerType = null; // 'mouse' | 'pen' | 'touch' of the current stroke
+
+    // --- Accidental-touch rejection (iPad/iPhone finger drawing) ---
+    // While/just after the Apple Pencil is used, ignore finger touches (palm rest).
+    // Only one touch drives a stroke/anchor at a time, so extra fingers are ignored.
+    const PEN_TOUCH_LOCKOUT = 900; // ms
+    let penInkTime = -1e9;         // last time an Apple Pencil ('pen') event fired
+    let penTouchId = null;         // the single touch allowed to drive the pen tool
+    function isPalmTouch(e) {
+      if (e.pointerType === 'pen') { penInkTime = performance.now(); return false; }
+      if (e.pointerType === 'touch' && performance.now() - penInkTime < PEN_TOUCH_LOCKOUT) return true;
+      return false;
+    }
     
     // Stroke Interpolation Tracking
     let targetX = 0, targetY = 0;
@@ -1676,11 +1696,24 @@
 
     // --- POINTER EVENTS ---
     canvas.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'touch') return; 
-      if (penMode) { penPointerDown(e); return; }
-      if (activePointerId !== null) return; 
+      if (isPalmTouch(e)) return; // ignore finger resting while using the Apple Pencil
+      if (penMode) {
+        // One finger at a time for anchor placement; ignore extra simultaneous touches.
+        if (e.pointerType === 'touch') {
+          if (penTouchId !== null) return;
+          penTouchId = e.pointerId;
+        }
+        penPointerDown(e); return;
+      }
+
+      // Apple Pencil preempts an in-progress finger stroke (late palm rejection).
+      if (e.pointerType === 'pen' && activePointerId !== null && activePointerType === 'touch') {
+        isDrawing = false; strokeRecordingActive = false; activePointerId = null;
+      }
+      if (activePointerId !== null) return; // single stroke; extra touches ignored
 
       activePointerId = e.pointerId;
+      activePointerType = e.pointerType;
       isDrawing = true;
       strokeRecordingActive = true;
       hideBrushPreview();
@@ -1716,12 +1749,17 @@
         isDrawing = false;
         strokeRecordingActive = false;
         activePointerId = null;
+        activePointerType = null;
         if (e.pointerType !== 'touch') showBrushPreview(e.clientX, e.clientY);
       }
     }
 
     window.addEventListener('pointerup', endStroke);
     window.addEventListener('pointercancel', endStroke);
+    // Release the pen-tool touch lock so the next tap can place an anchor.
+    function releasePenTouch(e) { if (e.pointerId === penTouchId) penTouchId = null; }
+    window.addEventListener('pointerup', releasePenTouch);
+    window.addEventListener('pointercancel', releasePenTouch);
 
     // --- Brush size/color preview ring (desktop, before drawing) ---
     const brushPreview = document.getElementById('brush-preview');
@@ -1740,8 +1778,12 @@
     function hideBrushPreview() { brushPreview.style.display = 'none'; }
 
     canvas.addEventListener('pointermove', (e) => {
-      if (e.pointerType === 'touch') return;
-      if (penMode) { penPointerMove(e); return; }
+      if (isPalmTouch(e)) return; // refreshes pencil-use time; rejects palm touches
+      if (penMode) {
+        if (e.pointerType === 'touch' && penTouchId !== null && e.pointerId !== penTouchId) return;
+        penPointerMove(e); return;
+      }
+      if (e.pointerType === 'touch') return; // no hover ring for finger input
       if (isDrawing) { hideBrushPreview(); return; }
       showBrushPreview(e.clientX, e.clientY);
     });
@@ -2268,32 +2310,33 @@
       }
 
       if (isDrawing && strokeRecordingActive) {
+        // Smooth the raw pointer toward its target for fluid strokes.
         currentX += (targetX - currentX) * 0.25;
         currentY += (targetY - currentY) * 0.25;
-      }
 
-      if (isDrawing && strokeRecordingActive && currentFrame !== prevFrame) {
-        let framesElapsed = currentFrame - prevFrame;
-        if (framesElapsed < 0) framesElapsed += activeFrames;
-        
-        for(let i = 1; i <= framesElapsed; i++) {
-          let f = (prevFrame + i) % activeFrames;
-          addFreePoint(f, currentX, currentY);
-        }
-        lastSpatialX = currentX;
-        lastSpatialY = currentY;
-      }
-
-      if (isDrawing && strokeRecordingActive) {
+        // Lay a dense, continuous trail of dabs from the last drawn position to the
+        // current one, assigning each dab to the frame it belongs to in time. The
+        // spacing is a small fraction of the brush radius, so the dabs overlap into
+        // one continuous line (no visible circles). The faster the pointer moves,
+        // the more ground each frame covers -> fast strokes become long connected
+        // lines; slow strokes stay tight.
         const dx = currentX - lastSpatialX;
         const dy = currentY - lastSpatialY;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const brushSpacing = parseFloat(sizeSlider.value) * dpr * 0.12; 
-        
-        if (dist > brushSpacing) {
-          const steps = Math.floor(dist / brushSpacing);
-          for(let i = 1; i <= steps; i++) {
-            addPoint(lastSpatialX + dx * (i / steps), lastSpatialY + dy * (i / steps));
+        const dist = Math.hypot(dx, dy);
+        const spacing = Math.max(1, parseFloat(sizeSlider.value) * dpr * 0.12);
+        let framesElapsed = currentFrame - prevFrame;
+        if (framesElapsed < 0) framesElapsed += activeFrames;
+
+        if (dist >= spacing || framesElapsed > 0) {
+          const steps = Math.max(1, framesElapsed, Math.round(dist / spacing));
+          for (let i = 1; i <= steps; i++) {
+            const t = i / steps;
+            const x = lastSpatialX + dx * t;
+            const y = lastSpatialY + dy * t;
+            // Split the segment across the frames crossed this tick so consecutive
+            // frames share seams and the loop plays back as one continuous stroke.
+            const f = (prevFrame + Math.round(framesElapsed * t)) % activeFrames;
+            addFreePoint(f, x, y);
           }
           lastSpatialX = currentX;
           lastSpatialY = currentY;
