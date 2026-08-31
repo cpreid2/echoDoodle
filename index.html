@@ -64,6 +64,14 @@
       z-index: 0;
     }
 
+    /* Tracing Overlay */
+    #tracing-overlay {
+      position: absolute; left: 50%; top: 50%;
+      transform: translate(-50%, -50%) scale(1);
+      pointer-events: none; z-index: 0; opacity: 0.25;
+      max-width: none; max-height: none;
+    }
+
     /* Splash / load screen */
     #splash {
       position: fixed; inset: 0; z-index: 1000;
@@ -126,6 +134,12 @@
       border-color: #45464c #101014 #101014 #45464c;
     }
     #pen-cancel:active { background: #333; }
+    #pen-delkey {
+      color: #2a1c00; background: var(--gold, #ffd54a);
+      border-color: #ffe89a #8a6800 #6a5000 #ffe89a;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+    }
+    #pen-delkey:active { background: #e6bd2f; }
 
     /* Brush preview ring that follows the cursor before drawing */
     #brush-preview {
@@ -185,12 +199,21 @@
     .frame-step {
       flex: 1 1 0; min-width: 2px; border-radius: 1px;
       background: var(--led-off);
-      cursor: pointer;
+      cursor: pointer; position: relative;
       transition: background 0.08s ease, box-shadow 0.08s ease;
     }
 
     .frame-step:hover {
       background: #1f6b34;
+    }
+
+    /* Keyframe marker (gold diamond) for the pen path being edited */
+    .frame-step.has-key::after {
+      content: ""; position: absolute; left: 50%; top: -6px;
+      width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg);
+      background: var(--gold, #ffd54a);
+      box-shadow: 0 0 5px rgba(255,213,74,0.85);
+      z-index: 3; pointer-events: none;
     }
 
     /* Lit LED (playhead) — bright green core with a soft bloom (paused) */
@@ -204,6 +227,103 @@
     #bottom-panel.playing .frame-step.active {
       background: var(--led-on);
       box-shadow: 0 0 6px 1px var(--led-glow);
+    }
+
+    /* --- Pads mode: the LED strip morphs into a row of sequence pads --- */
+    #timeline-container {
+      position: relative;
+      transition: height 0.22s ease, gap 0.22s ease, padding 0.22s ease;
+    }
+    #timeline-container.pads-mode {
+      height: 58px; gap: 6px; padding: 6px 7px;
+      background: linear-gradient(180deg, #0b0b0d 0%, #16161a 100%);
+    }
+
+    /* Cycle sweep across the whole strip so the bar position stays readable */
+    #pads-playhead {
+      position: absolute; top: 3px; bottom: 3px; width: 1px;
+      left: 7px; z-index: 4; pointer-events: none;
+      background: rgba(255,255,255,0.16);
+      display: none;
+    }
+    #timeline-container.pads-mode #pads-playhead { display: block; }
+
+    .pad {
+      position: relative; flex: 1 1 0; min-width: 0; overflow: hidden;
+      border-radius: 6px; cursor: pointer;
+      background: var(--plastic-btn);
+      border: 2px solid; border-color: var(--bevel-raised);
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.10);
+      display: flex; align-items: flex-end; justify-content: center;
+      transition: background .12s ease, box-shadow .12s ease, border-color .12s ease, transform .06s ease;
+      --prog: 0%; --arm: 0%;
+    }
+    .pad:active { transform: translateY(1px); }
+
+    .pad-num {
+      position: relative; z-index: 3;
+      font-family: var(--font-display); font-weight: 700; font-size: 12px;
+      letter-spacing: 1px; color: #5c5c66; padding-bottom: 5px;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.75);
+    }
+    .pad-led {
+      position: absolute; z-index: 3; top: 6px; left: 50%; transform: translateX(-50%);
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--led-off);
+      box-shadow: inset 0 1px 1px rgba(0,0,0,0.6);
+      transition: background .12s ease, box-shadow .12s ease;
+    }
+
+    /* Cycle progress inside the pad that is currently playing */
+    .pad-prog {
+      position: absolute; left: 0; top: 0; bottom: 0; z-index: 1;
+      width: var(--prog); opacity: 0;
+      background: linear-gradient(180deg, rgba(0,255,65,0.26) 0%, rgba(0,255,65,0.07) 100%);
+      border-right: 1px solid rgba(157,255,181,0.75);
+    }
+    .pad.playing .pad-prog { opacity: 1; }
+
+    /* Hold-to-assign fill rises from the bottom of the pad */
+    .pad-arm {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+      height: var(--arm);
+      background: linear-gradient(180deg, rgba(255,213,74,0.12) 0%, rgba(255,213,74,0.5) 100%);
+    }
+
+    /* A pad holding a sequence reads as a loaded, raised key */
+    .pad.filled {
+      background: var(--plastic-btn-hover);
+      border-color: #55565e #101014 #0c0c10 #55565e;
+    }
+    .pad.filled .pad-num { color: var(--ink); }
+    .pad.filled .pad-led { background: #1f6b34; }
+
+    /* The pattern on air */
+    .pad.playing {
+      box-shadow: inset 0 0 0 1px var(--led-on), 0 0 10px rgba(0,255,65,0.28);
+    }
+    .pad.playing .pad-num { color: var(--led-on); text-shadow: 0 0 6px var(--led-glow); }
+    .pad.playing .pad-led { background: var(--led-on); box-shadow: 0 0 6px 1px var(--led-glow); }
+
+    /* Queued: waiting for the current cycle to finish (blinks like real gear) */
+    .pad.queued { animation: padQueue 0.44s steps(1, end) infinite; }
+    .pad.queued .pad-num { color: var(--gold); }
+    .pad.queued .pad-led { background: var(--gold); box-shadow: 0 0 6px 1px rgba(255,213,74,0.8); }
+    @keyframes padQueue {
+      0%, 49% { box-shadow: inset 0 0 0 1px rgba(255,213,74,0.9), 0 0 10px rgba(255,213,74,0.3); }
+      50%, 100% { box-shadow: 1px 2px 4px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.10); }
+    }
+
+    /* Momentary feedback: a sequence was written / an empty pad was tapped */
+    .pad.stored { box-shadow: inset 0 0 0 2px var(--gold), 0 0 12px rgba(255,213,74,0.55); }
+    .pad.reject { box-shadow: inset 0 0 0 1px #ff5f5f; }
+
+    /* Locked controls (frame count is fixed while pads share one cycle) */
+    input[type="range"]:disabled { opacity: 0.4; cursor: not-allowed; }
+    .lock-badge {
+      color: var(--gold); font-size: 9px; letter-spacing: 1px;
+      border: 1px solid rgba(255,213,74,0.45); border-radius: 3px;
+      padding: 0 4px; margin-left: 6px;
     }
 
     /* Per-frame edit mode indicators */
@@ -230,18 +350,29 @@
     #play-btn:active { transform: translateY(1px); box-shadow: inset 1px 2px 4px rgba(0,0,0,0.35); border-color: var(--bevel-inset); }
     #play-btn svg { width: 12px; height: 12px; fill: currentColor; }
 
-    /* Minimize Button */
-    #minimize-btn {
+    /* Minimize Button (and the Pads toggle beside it) */
+    #minimize-btn, #pads-btn {
       background: var(--plastic-btn);
       border: 2px solid; border-color: var(--bevel-raised);
       color: var(--ink); font-family: var(--font-mono); font-weight: 700;
-      font-size: 10px; letter-spacing: 1px; padding: 6px 11px; border-radius: 7px;
+      font-size: 10px; letter-spacing: 1px; padding: 0; border-radius: 7px;
+      width: 36px; height: 28px;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
       box-shadow: 1px 2px 4px rgba(0,0,0,0.35), inset 0 1px 1px rgba(255,255,255,0.16);
       transition: all 0.1s ease;
+      flex-shrink: 0; align-self: center;
     }
-    #minimize-btn:hover { background: var(--plastic-btn-hover); }
-    #minimize-btn:active { transform: translateY(1px); box-shadow: inset 1px 2px 4px rgba(0,0,0,0.35); border-color: var(--bevel-inset); }
+    #minimize-btn svg, #pads-btn svg { width: 13px; height: 13px; fill: currentColor; display: block; }
+    /* The triangle points up while the tools are hidden, and flips when shown. */
+    #minimize-btn svg { transition: transform 0.2s ease; }
+    #bottom-panel:not(.minimized) #minimize-btn svg { transform: rotate(180deg); }
+    #minimize-btn:hover, #pads-btn:hover { background: var(--plastic-btn-hover); }
+    #minimize-btn:active, #pads-btn:active { transform: translateY(1px); box-shadow: inset 1px 2px 4px rgba(0,0,0,0.35); border-color: var(--bevel-inset); }
+    #pads-btn.active {
+      background: radial-gradient(circle at 40% 30%, #ffe37a, var(--gold));
+      border-color: #b8860b #6a5000 #4a3800 #8a6800; color: #3a2c00;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.5), 0 0 6px rgba(255,213,74,0.5);
+    }
 
     /* Controls Grid */
     #controls-layout {
@@ -303,12 +434,22 @@
     .val-display { 
       color: var(--lcd-text); font-size: 11px; letter-spacing: 1px; font-weight: 700;
       font-family: var(--font-mono);
-      min-width: 34px; text-align: right; padding: 1px 6px; border-radius: 3px;
+      min-width: 34px; max-width: 52px; text-align: right; padding: 1px 6px; border-radius: 3px;
       background: var(--lcd-bg);
       border: 1px solid #05070a;
       box-shadow: inset 0 1px 3px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.35);
       text-shadow: 0 0 5px rgba(143,240,168,0.65);
     }
+
+    input.val-display {
+      -moz-appearance: textfield;
+      outline: none; cursor: text;
+    }
+    input.val-display::-webkit-outer-spin-button,
+    input.val-display::-webkit-inner-spin-button {
+      -webkit-appearance: none; margin: 0;
+    }
+    input.val-display:focus { box-shadow: inset 0 1px 3px rgba(0,0,0,0.8), 0 0 0 1px var(--led-on); }
 
     /* Inputs Styling */
     input[type="color"] {
@@ -561,6 +702,40 @@
     }
     #curve-canvas:active { cursor: grabbing; }
 
+    /* Floating Tracing Overlay Panel */
+    #overlay-panel {
+      position: fixed; top: 64px; right: 24px; z-index: 30;
+      width: 220px;
+      background: var(--plastic-bay);
+      border: 3px solid; border-color: var(--bevel-inset);
+      border-radius: 14px; color: var(--ink);
+      box-shadow: 4px 6px 16px rgba(0,0,0,0.45), inset 0 1px 2px rgba(255,255,255,0.4);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #overlay-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 8px 8px 12px; cursor: move;
+      background: var(--plate-dark);
+      border-bottom: 2px solid #1a1a1a;
+      touch-action: none;
+    }
+    .overlay-panel-title {
+      color: var(--plate-text); font-family: var(--font-display);
+      font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+      text-transform: uppercase; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    }
+    .overlay-panel-actions { display: flex; gap: 6px; }
+    .overlay-panel-actions button {
+      background: var(--plastic-btn); border: 2px solid; border-color: var(--bevel-raised);
+      color: var(--ink); width: 22px; height: 22px; border-radius: 5px;
+      cursor: pointer; font-size: 14px; line-height: 1; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: inset 0 1px 1px rgba(255,255,255,0.16);
+    }
+    .overlay-panel-actions button:hover { background: var(--plastic-btn-hover); }
+    .overlay-panel-actions button:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(0,0,0,0.3); }
+    #overlay-panel-body { display: flex; flex-direction: column; gap: 12px; padding: 16px 12px; }
+
     /* Responsive adjustments */
     @media (max-width: 768px) {
       #bottom-panel { width: 100%; bottom: 0; border-radius: 16px 16px 0 0; border-bottom: none; border-left: none; border-right: none; }
@@ -598,6 +773,7 @@
   </script>
 
   <div id="grid-bg"></div>
+  <img id="tracing-overlay" class="hidden" src="" alt="Overlay">
   <canvas id="glcanvas"></canvas>
   <canvas id="pen-overlay"></canvas>
   <div id="brush-preview"></div>
@@ -605,6 +781,7 @@
   <!-- Floating Done/Cancel for the pen tool (touch-friendly finish/exit) -->
   <div id="pen-actions">
     <button id="pen-done" type="button">Done</button>
+    <button id="pen-delkey" type="button" style="display:none">Del Key</button>
     <button id="pen-cancel" type="button">Cancel</button>
   </div>
 
@@ -615,6 +792,7 @@
       <div class="menu-dropdown hidden">
         <button type="button" class="menu-item" id="raw-btn">Save</button>
         <button type="button" class="menu-item" id="import-btn">Load</button>
+        <button type="button" class="menu-item" id="load-overlay-btn">Load Overlay</button>
       </div>
     </div>
     <div class="menu" id="export-menu">
@@ -624,6 +802,7 @@
       <button type="button" class="menu-title" id="info-btn" aria-label="About">About</button>
     </div>
     <input type="file" id="import-file" accept="application/json,.json" style="display:none">
+    <input type="file" id="overlay-file" accept="image/*" style="display:none">
     <button type="button" class="menu-title" id="undo-btn" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M9 14 4 9l5-5"/>
@@ -639,11 +818,32 @@
       </svg>
     </button>
   </div>
+  
   <div id="about-overlay" class="hidden">
     <div id="about-dialog">
       <div class="about-title">echoDoodle</div>
       <div class="about-sub">made by Colin Reid</div>
       <button id="about-close">Close</button>
+    </div>
+  </div>
+
+  <!-- Floating Tracing Overlay Panel -->
+  <div id="overlay-panel" class="hidden">
+    <div id="overlay-panel-header">
+      <span class="overlay-panel-title">Tracing Overlay</span>
+      <div class="overlay-panel-actions">
+        <button id="overlay-close-btn" title="Close" aria-label="Close">&times;</button>
+      </div>
+    </div>
+    <div id="overlay-panel-body">
+      <div class="control-group">
+        <span class="label">Opacity</span>
+        <input type="range" id="overlay-opacity" min="0.05" max="1" step="0.05" value="0.25">
+      </div>
+      <div class="control-group">
+        <span class="label">Scale</span>
+        <input type="range" id="overlay-scale" min="0.1" max="5" step="0.05" value="1">
+      </div>
     </div>
   </div>
 
@@ -692,8 +892,18 @@
     <!-- Header: Timeline & Minimize Button -->
     <div id="panel-header">
       <button id="play-btn" aria-label="Play/Pause"></button>
-      <div id="timeline-container"></div>
-      <button id="minimize-btn">SHOW</button>
+      <div id="timeline-container"><div id="pads-playhead"></div></div>
+      <button id="pads-btn" aria-pressed="false" aria-label="Pads" title="Pads: store and launch sequences">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <rect x="1.2" y="1.2" width="5.8" height="5.8" rx="1.3"/>
+          <rect x="9" y="1.2" width="5.8" height="5.8" rx="1.3"/>
+          <rect x="1.2" y="9" width="5.8" height="5.8" rx="1.3"/>
+          <rect x="9" y="9" width="5.8" height="5.8" rx="1.3"/>
+        </svg>
+      </button>
+      <button id="minimize-btn" aria-label="Show tools" aria-expanded="false" title="Show / hide tools">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5l6.2 9H1.8z"/></svg>
+      </button>
     </div>
 
     <!-- Organized Sliders -->
@@ -727,12 +937,23 @@
       <div class="control-column">
         <div class="col-title">Animation</div>
         <div class="control-group">
-          <span class="label">Frames <span id="val-frames" class="val-display">30</span></span>
+          <span class="label">
+            <span style="display:flex; align-items:center;">
+              Frames<span id="frames-lock" class="lock-badge hidden">Locked</span>
+            </span>
+            <span id="val-frames" class="val-display">30</span>
+          </span>
           <input type="range" id="frames-slider" min="10" max="180" value="30">
         </div>
         <div class="control-group">
-          <span class="label">Speed <span id="val-speed" class="val-display">1.0x</span></span>
-          <input type="range" id="speed-slider" min="0.1" max="1.5" step="0.1" value="0.7">
+          <span class="label">
+            <span style="display:flex; align-items:center; gap:6px;">
+              Speed
+              <button id="tempo-toggle-btn" class="toggle-btn" aria-pressed="false" title="Toggle Speed/BPM">SPD</button>
+            </span>
+            <input type="number" id="val-speed" class="val-display" value="0.7" step="0.1">
+          </span>
+          <input type="range" id="speed-slider" min="0.1" max="3.0" step="0.1" value="0.7">
         </div>
         <div class="control-group">
           <span class="label">
@@ -901,10 +1122,17 @@
     // paths) taken BEFORE a mutating action, so undo restores the prior state.
     const UNDO_LIMIT = 40;
     let undoStack = [];
+    function clonePath(p) {
+      return {
+        ...p,
+        anchors: p.anchors.map(a => ({ x: a.x, y: a.y })),
+        keys: (p.keys || []).map(k => ({ frame: k.frame, anchors: k.anchors.map(a => ({ x: a.x, y: a.y })) })),
+      };
+    }
     function snapshotState() {
       return {
         free: freeData.map(a => a.slice()),
-        pens: penPaths.map(p => ({ ...p, anchors: p.anchors.map(a => ({ ...a })) })),
+        pens: penPaths.map(clonePath),
       };
     }
     function pushUndo() {
@@ -925,9 +1153,10 @@
         freeData[f] = (s.free[f] || []).slice();
         frameNeedsUpdate[f] = true;
       }
-      penPaths = s.pens.map(p => ({ ...p, anchors: p.anchors.map(a => ({ ...a })) }));
+      penPaths = s.pens.map(clonePath);
       rebakePen(); // rebuild frameData from freeData + penPaths
       if (typeof drawPenOverlay === 'function') drawPenOverlay();
+      if (typeof updateKeyframeMarkers === 'function') updateKeyframeMarkers();
       updateUndoBtn();
     }
 
@@ -935,6 +1164,7 @@
     let editMode = false; // per-frame editing: paused on a selected frame, draw builds that frame
     let playheadPos = 0.0;
     let currentFrame = 0;
+    let syncEditStartFrame = null; // Tracks the start frame for Sync + Edit mode
 
     let firstParticle = null; 
     let firstParticleFrame = null; 
@@ -942,8 +1172,14 @@
 
     let strokeRecordingActive = false; 
     let isSyncActive = false;
+
+    // --- Engine Tempo State ---
+    let engineSpeed = 0.7;
+    let isBpmMode = false;
     
     // UI Elements
+    const tempoToggleBtn = document.getElementById('tempo-toggle-btn');
+    const valSpeedInput = document.getElementById('val-speed');
     const colorPicker = document.getElementById('color-picker');
     const sizeSlider = document.getElementById('size-slider');
     const opacitySlider = document.getElementById('opacity-slider');
@@ -954,7 +1190,6 @@
     const softSlider = document.getElementById('soft-slider');
     
     const valFrames = document.getElementById('val-frames');
-    const valSpeed = document.getElementById('val-speed');
     const valTrail = document.getElementById('val-trail');
     
     const bottomPanel = document.getElementById('bottom-panel');
@@ -965,10 +1200,90 @@
     const exportBtn = document.getElementById('export-btn');
     let frameSteps = [];
 
+    // --- Pads (sequence launcher) state ---
+    // Ten slots, each holding one complete cycle. Every pad plays on the same
+    // clock and frame count, so patterns stay phase-locked like hardware.
+    const MAX_PADS = 10;
+    const PAD_HOLD_MS = 420;      // hold this long on a pad to write the cycle into it
+    const padsBtn = document.getElementById('pads-btn');
+    const padsPlayhead = document.getElementById('pads-playhead');
+    const framesLock = document.getElementById('frames-lock');
+    let padsMode = false;
+    let padSlots = new Array(MAX_PADS).fill(null);
+    let padEls = [];
+    let activePad = -1;           // pad currently on air
+    let queuedPad = -1;           // pad waiting for the current cycle to finish
+    let padBufferDirty = false;   // canvas has drawing that no pad holds yet
+    let padArm = null;            // in-progress hold-to-assign gesture
+
+    // --- BPM & Tempo Helpers ---
+    function getBpm() {
+      const f = parseInt(framesSlider.value, 10);
+      return (engineSpeed * 3600) / f;
+    }
+    
+    function setBpm(bpm) {
+      const f = parseInt(framesSlider.value, 10);
+      engineSpeed = (bpm * f) / 3600;
+    }
+
+    function updateTempoUI() {
+      if (isBpmMode) {
+        tempoToggleBtn.innerText = 'BPM';
+        tempoToggleBtn.classList.add('active');
+        speedSlider.min = 30;
+        speedSlider.max = 300;
+        speedSlider.step = 1;
+        const bpm = Math.round(getBpm());
+        speedSlider.value = bpm;
+        valSpeedInput.value = bpm;
+        valSpeedInput.step = 1;
+      } else {
+        tempoToggleBtn.innerText = 'SPD';
+        tempoToggleBtn.classList.remove('active');
+        speedSlider.min = 0.1;
+        speedSlider.max = 3.0; 
+        speedSlider.step = 0.1;
+        speedSlider.value = engineSpeed.toFixed(1);
+        valSpeedInput.value = engineSpeed.toFixed(1);
+        valSpeedInput.step = 0.1;
+      }
+      updateRangeFill(speedSlider);
+    }
+
+    tempoToggleBtn.addEventListener('click', () => {
+      isBpmMode = !isBpmMode;
+      updateTempoUI();
+    });
+
+    speedSlider.addEventListener('input', (e) => {
+      const val = parseFloat(e.target.value);
+      if (isBpmMode) {
+        setBpm(val);
+        valSpeedInput.value = val;
+      } else {
+        engineSpeed = val;
+        valSpeedInput.value = engineSpeed.toFixed(1);
+      }
+    });
+
+    valSpeedInput.addEventListener('change', (e) => {
+      let val = parseFloat(e.target.value);
+      if (isNaN(val)) return updateTempoUI(); // revert if they type garbage
+      if (isBpmMode) {
+        setBpm(val);
+      } else {
+        engineSpeed = Math.max(0.1, Math.min(3.0, val));
+      }
+      updateTempoUI();
+    });
+
     // --- Minimize Logic ---
+    // The arrow itself flips via CSS off the .minimized class.
     minimizeBtn.addEventListener('click', () => {
-      bottomPanel.classList.toggle('minimized');
-      minimizeBtn.innerText = bottomPanel.classList.contains('minimized') ? 'SHOW' : 'HIDE';
+      const hidden = bottomPanel.classList.toggle('minimized');
+      minimizeBtn.setAttribute('aria-label', hidden ? 'Show tools' : 'Hide tools');
+      minimizeBtn.setAttribute('aria-expanded', hidden ? 'false' : 'true');
     });
 
     // --- Play / Pause Logic ---
@@ -1346,7 +1661,7 @@
       if (isRecording) return; 
       
       const activeFrames = parseInt(framesSlider.value, 10);
-      const speed = parseFloat(speedSlider.value);
+      const speed = engineSpeed;
       requiredTicks = Math.ceil(activeFrames / speed);
       recordingTickCount = 0;
       
@@ -1387,10 +1702,12 @@
       mediaRecorder.start();
     });
 
-    // --- Save / Load ---
+    // --- Save / Load / Tracing Overlay ---
     const rawBtn = document.getElementById('raw-btn');
     const importBtn = document.getElementById('import-btn');
     const importFile = document.getElementById('import-file');
+    const loadOverlayBtn = document.getElementById('load-overlay-btn');
+    const overlayFile = document.getElementById('overlay-file');
 
     function roundTo(n, p) { const f = Math.pow(10, p); return Math.round(n * f) / f; }
 
@@ -1419,7 +1736,7 @@
         refW: canvas.width, refH: canvas.height,
         floatsPerPoint: floatsPerPoint,
         frameCount: frames,
-        speed: parseFloat(speedSlider.value),
+        speed: engineSpeed,
         trail: parseInt(trailSlider.value, 10),
         opacity: parseFloat(opacitySlider.value),
         blur: parseFloat(blurSlider.value),
@@ -1455,6 +1772,84 @@
       };
       reader.readAsText(file);
     });
+
+    // --- Overlay Image Logic ---
+    const tracingOverlay = document.getElementById('tracing-overlay');
+    const overlayPanel = document.getElementById('overlay-panel');
+    const overlayOpacity = document.getElementById('overlay-opacity');
+    const overlayScale = document.getElementById('overlay-scale');
+    const overlayCloseBtn = document.getElementById('overlay-close-btn');
+    const overlayHeader = document.getElementById('overlay-panel-header');
+
+    loadOverlayBtn.addEventListener('click', () => overlayFile.click());
+
+    overlayFile.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        tracingOverlay.src = event.target.result;
+        tracingOverlay.classList.remove('hidden');
+        overlayPanel.classList.remove('hidden');
+        
+        // Reset to default tracing settings
+        overlayOpacity.value = 0.25;
+        overlayScale.value = 1.0;
+        updateRangeFill(overlayOpacity);
+        updateRangeFill(overlayScale);
+        applyOverlayTransforms();
+      };
+      reader.readAsDataURL(file);
+      overlayFile.value = ''; 
+    });
+
+    function applyOverlayTransforms() {
+      tracingOverlay.style.opacity = overlayOpacity.value;
+      tracingOverlay.style.transform = `translate(-50%, -50%) scale(${overlayScale.value})`;
+    }
+
+    overlayOpacity.addEventListener('input', applyOverlayTransforms);
+    overlayScale.addEventListener('input', applyOverlayTransforms);
+
+    overlayCloseBtn.addEventListener('click', () => {
+      tracingOverlay.classList.add('hidden');
+      overlayPanel.classList.add('hidden');
+      tracingOverlay.src = '';
+    });
+
+    // Make Overlay Panel Draggable
+    (function () {
+      let dragging = false, sx = 0, sy = 0, startLeft = 0, startTop = 0;
+      overlayHeader.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button')) return; 
+        dragging = true;
+        const rect = overlayPanel.getBoundingClientRect();
+        startLeft = rect.left; startTop = rect.top;
+        sx = e.clientX; sy = e.clientY;
+        overlayPanel.style.left = startLeft + 'px';
+        overlayPanel.style.top = startTop + 'px';
+        overlayPanel.style.right = 'auto';
+        overlayHeader.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      overlayHeader.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        let nl = startLeft + (e.clientX - sx);
+        let nt = startTop + (e.clientY - sy);
+        nl = Math.max(0, Math.min(window.innerWidth - 60, nl));
+        nt = Math.max(0, Math.min(window.innerHeight - 40, nt));
+        overlayPanel.style.left = nl + 'px';
+        overlayPanel.style.top = nt + 'px';
+      });
+      function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        try { overlayHeader.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+      overlayHeader.addEventListener('pointerup', endDrag);
+      overlayHeader.addEventListener('pointercancel', endDrag);
+    })();
 
     // --- Top menu bar: File dropdown open/close ---
     (function () {
@@ -1507,12 +1902,17 @@
         return;
       }
       pushUndo(); // loading a project is undoable
+      // A loaded project brings its own frame count (which pads mode locks) and
+      // starts a new session, so any stored sequences go with the old one.
+      if (padsMode) setPadsMode(false);
+      padSlots = new Array(MAX_PADS).fill(null);
       const frames = Math.max(10, Math.min(MAX_FRAMES, p.frameCount | 0));
 
       setSliderValue(framesSlider, frames);
       valFrames.innerText = frames;
       trailSlider.max = frames;
-      setSliderValue(speedSlider, p.speed);
+      engineSpeed = Number.isFinite(p.speed) ? p.speed : 0.7;
+      updateTempoUI();
       setSliderValue(trailSlider, p.trail);
       setSliderValue(opacitySlider, p.opacity);
       setSliderValue(blurSlider, p.blur);
@@ -1525,7 +1925,6 @@
         bottomPanel.style.setProperty('--playhead-color', colorPicker.value);
       }
 
-      valSpeed.innerText = parseFloat(speedSlider.value).toFixed(1) + 'x';
       valTrail.innerText = trailSlider.value;
       buildTimeline(frames);
       document.querySelectorAll('input[type="range"]').forEach(updateRangeFill);
@@ -1576,9 +1975,15 @@
     }
 
     // --- Quantized Timeline Setup ---
-    function buildTimeline(totalFrames) {
-      timelineContainer.innerHTML = '';
+    // The strip is shared with pads mode, so clear only the cells and keep the
+    // persistent playhead element.
+    function clearTimelineCells() {
+      timelineContainer.querySelectorAll('.frame-step, .pad').forEach(el => el.remove());
       frameSteps = [];
+      padEls = [];
+    }
+    function buildTimeline(totalFrames) {
+      clearTimelineCells();
       for (let i = 0; i < totalFrames; i++) {
         const step = document.createElement('div');
         step.className = 'frame-step';
@@ -1605,21 +2010,27 @@
     }
     function scrubTimelineTo(clientX) {
       const idx = frameFromClientX(clientX);
+      // If a pen path is mid-edit, save the current pose and load the pose for the
+      // frame we're scrubbing to, so you can pose across frames to build keyframes.
+      const editingActive = (typeof penEditing !== 'undefined') && penEditing && penEditBackup;
+      if (editingActive && idx !== currentFrame) stashEditPose();
       editMode = true;
       isPlaying = false;
       playheadPos = idx;
       currentFrame = idx;
+      if (editingActive) { loadEditPose(idx); drawPenOverlay(); updateKeyframeMarkers(); }
       updateEditModeUI();
       updatePlayBtn();
     }
     timelineContainer.addEventListener('pointerdown', (e) => {
+      if (padsMode) return; // the strip is a pad bank now, not a scrubbable ruler
       timelineScrubbing = true;
       try { timelineContainer.setPointerCapture(e.pointerId); } catch (_) {}
       scrubTimelineTo(e.clientX);
       e.preventDefault();
     });
     timelineContainer.addEventListener('pointermove', (e) => {
-      if (!timelineScrubbing) return;
+      if (!timelineScrubbing || padsMode) return;
       scrubTimelineTo(e.clientX);
       e.preventDefault();
     });
@@ -1630,6 +2041,263 @@
     }
     timelineContainer.addEventListener('pointerup', endTimelineScrub);
     timelineContainer.addEventListener('pointercancel', endTimelineScrub);
+
+    // ================= Pads: sequence launcher =================
+    // The timeline morphs into ten pads, each holding one complete cycle. It runs
+    // by classic sequencer rules: one global clock, one fixed cycle length shared
+    // by every pad, and pattern changes that land on the cycle boundary rather
+    // than the instant you press.
+    //
+    // A pad holds an independent snapshot: holding a pad writes the cycle that is
+    // on the canvas into it, and nothing else ever rewrites that slot. Drawing
+    // after a pad is launched only changes the canvas, so the stored sequences
+    // stay exactly as they were captured.
+
+    function liveBufferHasContent() {
+      if (penPaths.length) return true;
+      for (let f = 0; f < MAX_FRAMES; f++) if (freeData[f].length) return true;
+      return false;
+    }
+
+    // Drawing marks the canvas as holding work no pad owns, so swapping a pad in
+    // can drop it onto the undo stack instead of losing it.
+    function markPadDirty() { if (padsMode) padBufferDirty = true; }
+
+    function restoreSequence(s) {
+      resetActivePen();
+      for (let f = 0; f < MAX_FRAMES; f++) {
+        freeData[f] = (s.free[f] || []).slice();
+        frameNeedsUpdate[f] = true;
+      }
+      penPaths = s.pens.map(clonePath);
+      rebakePen();
+      drawPenOverlay();
+      updateKeyframeMarkers();
+    }
+
+    function buildPads() {
+      clearTimelineCells();
+      for (let i = 0; i < MAX_PADS; i++) {
+        const pad = document.createElement('div');
+        pad.className = 'pad';
+        pad.dataset.index = i;
+        pad.title = 'Hold to store the current cycle \u00b7 Tap to queue it';
+        pad.innerHTML =
+          '<div class="pad-prog"></div><div class="pad-arm"></div>' +
+          '<div class="pad-led"></div>' +
+          '<span class="pad-num">' + ((i + 1) % 10) + '</span>';
+        pad.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          try { pad.setPointerCapture(e.pointerId); } catch (_) {}
+          beginPadArm(i, e.pointerId);
+        });
+        pad.addEventListener('pointerup', (e) => endPadArm(e.pointerId));
+        pad.addEventListener('pointercancel', () => cancelPadArm());
+        pad.addEventListener('contextmenu', (e) => e.preventDefault());
+        timelineContainer.appendChild(pad);
+        padEls.push(pad);
+      }
+      refreshPads();
+    }
+
+    function refreshPads() {
+      for (let i = 0; i < padEls.length; i++) {
+        const el = padEls[i];
+        el.classList.toggle('filled', !!padSlots[i]);
+        el.classList.toggle('playing', i === activePad && !!padSlots[i]);
+        el.classList.toggle('queued', i === queuedPad);
+        if (i !== activePad) el.style.setProperty('--prog', '0%');
+      }
+    }
+
+    function flashPad(i, cls) {
+      const el = padEls[i];
+      if (!el) return;
+      el.classList.add(cls);
+      setTimeout(() => el.classList.remove(cls), 220);
+    }
+
+    // --- Hold to assign / tap to launch ---------------------------------------
+    // Shared by the pads themselves and the number-row keys so both gestures feel
+    // identical: release early = launch, keep holding = write.
+    function beginPadArm(i, pointerId) {
+      if (padArm) return;
+      padArm = { i, pointerId, start: performance.now(), assigned: false, raf: 0 };
+      const el = padEls[i];
+      const step = () => {
+        if (!padArm || padArm.i !== i) return;
+        const t = Math.min(1, (performance.now() - padArm.start) / PAD_HOLD_MS);
+        if (el) el.style.setProperty('--arm', (t * 100).toFixed(1) + '%');
+        if (t >= 1) {
+          padArm.assigned = true;
+          if (el) el.style.setProperty('--arm', '0%');
+          assignPad(i);
+          return;
+        }
+        padArm.raf = requestAnimationFrame(step);
+      };
+      padArm.raf = requestAnimationFrame(step);
+    }
+
+    function endPadArm(pointerId) {
+      if (!padArm) return;
+      if (pointerId != null && padArm.pointerId != null && pointerId !== padArm.pointerId) return;
+      const { i, assigned, raf } = padArm;
+      cancelAnimationFrame(raf);
+      padArm = null;
+      const el = padEls[i];
+      if (el) el.style.setProperty('--arm', '0%');
+      if (!assigned) triggerPad(i);
+    }
+
+    function cancelPadArm() {
+      if (!padArm) return;
+      cancelAnimationFrame(padArm.raf);
+      const el = padEls[padArm.i];
+      if (el) el.style.setProperty('--arm', '0%');
+      padArm = null;
+    }
+
+    // Write the cycle on the canvas into a pad. Only this ever fills a slot.
+    function assignPad(i) {
+      if (!liveBufferHasContent()) { flashPad(i, 'reject'); return; }
+      padSlots[i] = snapshotState();
+      padBufferDirty = false;
+      activePad = i;
+      queuedPad = -1;
+      flashPad(i, 'stored');
+      refreshPads();
+    }
+
+    // Launch a pad. Nothing happens on the spot: the swap is armed and lands when
+    // the running cycle wraps, so the clock never stutters. Pressing the pad on
+    // air (or the queued pad again) cancels a pending change.
+    function triggerPad(i) {
+      if (!padSlots[i]) { flashPad(i, 'reject'); return; }
+      if (i === queuedPad || i === activePad) {
+        queuedPad = -1;
+        refreshPads();
+        return;
+      }
+      if (!isPlaying) {
+        // Transport stopped: there's no cycle to finish, so start this one at the top.
+        loadPadSequence(i);
+        playheadPos = 0;
+        currentFrame = 0;
+        editMode = false;
+        isPlaying = true;
+        updateEditModeUI();
+        updatePlayBtn();
+        return;
+      }
+      queuedPad = i;
+      refreshPads();
+    }
+
+    function loadPadSequence(i) {
+      const s = padSlots[i];
+      if (!s) return;
+      // Drawing that no pad holds would otherwise vanish; keep it on the undo stack.
+      if (padBufferDirty && liveBufferHasContent()) pushUndo();
+      restoreSequence(s);
+      activePad = i;
+      padBufferDirty = false;
+      firstParticle = null;
+      firstParticleFrame = null;
+      hasCompletedFirstCycle = true;
+      refreshPads();
+    }
+
+    // Called from the render loop the moment the cycle wraps.
+    function servicePadQueue() {
+      if (!padsMode || queuedPad < 0) return;
+      const i = queuedPad;
+      queuedPad = -1;
+      loadPadSequence(i);
+    }
+
+    // Cycle position readout: a sweep across the strip plus a fill inside the pad
+    // on air, so the bar is still legible once the frame LEDs are gone.
+    // Strip width is cached because this runs every frame.
+    let padStripWidth = 0;
+    function measurePadStrip() {
+      padStripWidth = Math.max(0, timelineContainer.getBoundingClientRect().width - 18);
+    }
+    window.addEventListener('resize', () => { if (padsMode) measurePadStrip(); });
+    function updatePadPlayhead(activeFrames) {
+      const t = activeFrames > 0 ? (playheadPos / activeFrames) : 0;
+      padsPlayhead.style.left = (7 + t * padStripWidth) + 'px';
+      if (activePad >= 0 && padEls[activePad]) {
+        padEls[activePad].style.setProperty('--prog', (t * 100).toFixed(1) + '%');
+      }
+    }
+
+    // The button only toggles what the strip shows: the stored sequences stay in
+    // memory, so switching back brings every pad up exactly as it was left.
+    function setPadsMode(on) {
+      if (on === padsMode) return;
+      padsMode = on;
+      cancelPadArm();
+      padsBtn.classList.toggle('active', on);
+      padsBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      queuedPad = -1;
+      activePad = -1;
+      padBufferDirty = false;
+
+      if (on) {
+        // Every pad shares one cycle, so the frame count is fixed while in pads mode.
+        framesSlider.disabled = true;
+        framesLock.classList.remove('hidden');
+        editMode = false;
+        updateEditModeUI();
+        timelineContainer.classList.add('pads-mode');
+        buildPads();
+        measurePadStrip();
+        setTimeout(() => { if (padsMode) measurePadStrip(); }, 260); // after the morph settles
+      } else {
+        framesSlider.disabled = false;
+        framesLock.classList.add('hidden');
+        timelineContainer.classList.remove('pads-mode');
+        buildTimeline(parseInt(framesSlider.value, 10));
+        updateKeyframeMarkers();
+      }
+    }
+
+    padsBtn.addEventListener('click', () => setPadsMode(!padsMode));
+
+    // Number row plays the pads: tap to queue, hold to store (mirrors the pads).
+    function padIndexFromKey(key) {
+      if (key === '0') return 9;
+      if (key >= '1' && key <= '9') return key.charCodeAt(0) - 49;
+      return -1;
+    }
+    function typingInField() {
+      const el = document.activeElement;
+      if (!el) return false;
+      const tag = el.tagName;
+      return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || el.isContentEditable;
+    }
+    window.addEventListener('keydown', (e) => {
+      if (!padsMode || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (typingInField()) return;
+      const i = padIndexFromKey(e.key);
+      if (i < 0) return;
+      e.preventDefault();
+      beginPadArm(i, null);
+    });
+    window.addEventListener('keyup', (e) => {
+      if (!padsMode) return;
+      const i = padIndexFromKey(e.key);
+      if (i < 0 || !padArm || padArm.i !== i) return;
+      e.preventDefault();
+      endPadArm(null);
+    });
+    // Releasing outside the pad (capture can fail on some touch stacks) still counts.
+    window.addEventListener('pointerup', () => {
+      if (padArm && padArm.pointerId !== null) endPadArm(padArm.pointerId);
+    });
+    // Losing focus mid-hold shouldn't leave a pad armed forever.
+    window.addEventListener('blur', cancelPadArm);
 
     // Prevent drawing when interacting with UI Panel
     bottomPanel.addEventListener('pointerdown', e => e.stopPropagation());
@@ -1649,9 +2317,16 @@
       valFrames.innerText = f;
       syncTrailRange();
       buildTimeline(f);
+      updateKeyframeMarkers(); // re-apply any keyframe diamonds after rebuild
+      
+      // Preserve BPM when frame count changes
+      if (isBpmMode) {
+        const currentBpm = parseFloat(valSpeedInput.value);
+        setBpm(currentBpm);
+      }
+      updateTempoUI();
     });
     
-    speedSlider.addEventListener('input', (e) => valSpeed.innerText = parseFloat(e.target.value).toFixed(1) + 'x');
     trailSlider.addEventListener('input', (e) => valTrail.innerText = e.target.value);
 
     // --- Slider fill (shows filled portion of the track) ---
@@ -1662,6 +2337,7 @@
       const pct = max > min ? ((val - min) / (max - min)) * 100 : 0;
       el.style.setProperty('--fill', pct + '%');
     }
+    // Bind logic for all currently existing and newly created input sliders
     const allSliders = document.querySelectorAll('input[type="range"]');
     allSliders.forEach((el) => {
       updateRangeFill(el);
@@ -1671,7 +2347,7 @@
     // Sync the value labels to the sliders' actual default values on load.
     function syncValueLabels() {
       valFrames.innerText = parseInt(framesSlider.value, 10);
-      valSpeed.innerText = parseFloat(speedSlider.value).toFixed(1) + 'x';
+      updateTempoUI();
       valTrail.innerText = trailSlider.value;
     }
     syncValueLabels();
@@ -1720,6 +2396,13 @@
 
     document.getElementById('clear-btn').addEventListener('click', () => {
       pushUndo(); // clearing is undoable
+      // In pads mode this is "new pattern": it wipes the canvas only. Every pad
+      // keeps the sequence it stored; nothing on air is written back.
+      if (padsMode) {
+        activePad = -1;
+        padBufferDirty = false;
+        refreshPads();
+      }
       for(let i=0; i<MAX_FRAMES; i++) {
         frameData[i] = [];
         freeData[i] = [];
@@ -1786,6 +2469,7 @@
       const p = makeBakedPoint(x, y, frameIndex, xNorm);
       for (let i = 0; i < p.length; i++) { frameData[frameIndex].push(p[i]); freeData[frameIndex].push(p[i]); }
       frameNeedsUpdate[frameIndex] = true;
+      markPadDirty();
     }
 
     function addPoint(x, y) {
@@ -1825,9 +2509,18 @@
       hideBrushPreview();
 
       if (editMode) {
-        // Per-frame edit: keep the playhead parked so the stroke lands on the
-        // currently selected frame only. The loop stays paused.
-        isPlaying = false;
+        if (isSyncActive) {
+          // Sync + Edit: Remember where we started, drop out of edit mode, and play
+          syncEditStartFrame = currentFrame;
+          editMode = false;
+          isPlaying = true;
+          updateEditModeUI();
+          updatePlayBtn();
+        } else {
+          // Per-frame edit: keep the playhead parked so the stroke lands on the
+          // currently selected frame only. The loop stays paused.
+          isPlaying = false;
+        }
       } else {
         isPlaying = true;
         if (isSyncActive) {
@@ -1857,6 +2550,17 @@
         activePointerId = null;
         activePointerType = null;
         if (e.pointerType !== 'touch') showBrushPreview(e.clientX, e.clientY);
+        
+        // If we were executing a Sync + Edit draw, snap back to the starting frame
+        if (syncEditStartFrame !== null) {
+          currentFrame = syncEditStartFrame;
+          playheadPos = currentFrame;
+          syncEditStartFrame = null;
+          editMode = true;
+          isPlaying = false;
+          updateEditModeUI();
+          updatePlayBtn();
+        }
       }
     }
 
@@ -1871,14 +2575,12 @@
     const brushPreview = document.getElementById('brush-preview');
     function showBrushPreview(cx, cy) {
       // On-screen diameter matches the drawn dab (base size is in CSS px).
+      // The ring stays white so it reads as a cursor regardless of brush colour.
       const d = Math.max(2, parseFloat(sizeSlider.value));
-      const col = colorPicker.value;
       brushPreview.style.width = d + 'px';
       brushPreview.style.height = d + 'px';
       brushPreview.style.left = cx + 'px';
       brushPreview.style.top = cy + 'px';
-      brushPreview.style.borderColor = col;
-      brushPreview.style.background = col + '30'; // ~19% alpha fill
       brushPreview.style.display = 'block';
     }
     function hideBrushPreview() { brushPreview.style.display = 'none'; }
@@ -1904,12 +2606,6 @@
         brushPreview.style.height = brushPreview.style.width;
       }
     });
-    colorPicker.addEventListener('input', () => {
-      if (brushPreview.style.display === 'block') {
-        brushPreview.style.borderColor = colorPicker.value;
-        brushPreview.style.background = colorPicker.value + '30';
-      }
-    });
 
     // ================= Beginner Pen Tool (auto-smoothed path) =================
     const penOverlay = document.getElementById('pen-overlay');
@@ -1933,17 +2629,118 @@
     let penEditBackup = null;   // original of a committed path being re-edited (for cancel)
     const PEN_HIT = 12;
 
+    // --- Pen path keyframe animation (shape morphing) -------------------------
+    // A path holds a base pose (path.anchors = frame 0) plus optional keyframes
+    // (path.keys = [{frame, anchors}]). When it has >=1 key it is "animated": each
+    // frame renders the FULL shape with anchors interpolated between the
+    // surrounding keys, wrapping seamlessly from the last key back to frame 0.
+    let penEditFrame = 0;         // frame whose pose is currently being edited
+    let penEditKeys = [];         // working copy of the edited path's keys
+    let penEditBaseAnchors = [];  // working copy of the edited path's frame-0 pose
+
+    function lerpAnchors(a, b, t) {
+      const n = Math.min(a.length, b.length);
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        out.push({ x: a[i].x + (b[i].x - a[i].x) * t, y: a[i].y + (b[i].y - a[i].y) * t });
+      }
+      return out;
+    }
+    // Ordered pose list for a path: base (frame 0) + its keys (frames > 0).
+    function posesSorted(path) {
+      const list = [{ frame: 0, anchors: path.anchors }];
+      if (path.keys) for (const k of path.keys) if (k.frame > 0) list.push(k);
+      list.sort((p, q) => p.frame - q.frame);
+      return list;
+    }
+    function pathIsAnimated(path) {
+      return !!(path.keys && path.keys.some(k => k.frame > 0));
+    }
+    // Interpolated anchor positions for `path` at frame `f` (seamless loop wrap).
+    function anchorsAtFrame(path, f, activeFrames) {
+      // Ignore keys beyond the current frame range so the wrap stays seamless.
+      const keys = posesSorted(path).filter(k => k.frame < activeFrames);
+      const m = keys.length;
+      if (m === 1) return keys[0].anchors;
+      for (let i = 0; i < m; i++) {
+        const cur = keys[i];
+        const nxt = (i + 1 < m) ? keys[i + 1]
+                                : { frame: keys[0].frame + activeFrames, anchors: keys[0].anchors };
+        if (f >= cur.frame && f < nxt.frame) {
+          const span = nxt.frame - cur.frame;
+          const t = span > 0 ? (f - cur.frame) / span : 0;
+          return lerpAnchors(cur.anchors, nxt.anchors, t);
+        }
+      }
+      return keys[m - 1].anchors;
+    }
+    // Anchors to show/hit-test for a committed path: follow the current frame
+    // while the Edit tool is active so handles track the morphing shape.
+    function committedAnchors(path) {
+      if (penEditing) return anchorsAtFrame(path, currentFrame, parseInt(framesSlider.value, 10));
+      return path.anchors;
+    }
+
+    // While actively editing, save the on-screen pose into the working keys/base
+    // for the frame being edited, then (re)load the pose for another frame.
+    function stashEditPose() {
+      if (!penEditing || !penEditBackup) return;
+      const pose = penAnchors.map(p => ({ x: p.x, y: p.y }));
+      if (penEditFrame <= 0) {
+        penEditBaseAnchors = pose;
+      } else {
+        const ex = penEditKeys.find(k => k.frame === penEditFrame);
+        if (ex) ex.anchors = pose;
+        else penEditKeys.push({ frame: penEditFrame, anchors: pose });
+        penEditKeys.sort((a, b) => a.frame - b.frame);
+      }
+    }
+    function loadEditPose(frame) {
+      const af = parseInt(framesSlider.value, 10);
+      const temp = { anchors: penEditBaseAnchors, keys: penEditKeys, closed: penClosed, smoothness: penSmoothness };
+      const pose = anchorsAtFrame(temp, frame, af);
+      penAnchors = pose.map(p => ({ x: p.x, y: p.y }));
+      penEditFrame = frame;
+    }
+    // Diamond markers on the timeline for the path being edited.
+    function updateKeyframeMarkers() {
+      const keyFrames = new Set();
+      if (penEditing && penEditBackup) {
+        keyFrames.add(0);
+        for (const k of penEditKeys) keyFrames.add(k.frame);
+        keyFrames.add(penEditFrame);
+      }
+      for (let i = 0; i < frameSteps.length; i++) {
+        frameSteps[i].classList.toggle('has-key', keyFrames.has(i));
+      }
+    }
+
     // Floating Done/Cancel control shown while a pen path is in progress. This is
     // the reliable, touch-friendly way to finish on iPad/Apple Pencil (double-tap
     // is flaky with a stylus, and there's no keyboard for Enter).
     const penActions = document.getElementById('pen-actions');
     const penDoneBtn = document.getElementById('pen-done');
     const penCancelBtn = document.getElementById('pen-cancel');
+    const penDelKeyBtn = document.getElementById('pen-delkey');
     function updatePenActions() {
       // Show while a pen/edit path is in progress so there's always a reliable,
       // tappable way to finish (Done) or bail (Cancel) — vital on iPad.
       const active = penMode && penAnchors.length >= 1;
       penActions.style.display = active ? 'flex' : 'none';
+      // "Del Key" appears when editing a keyframe (any frame past the base).
+      const canDelKey = active && penEditing && penEditBackup && penEditFrame > 0;
+      if (penDelKeyBtn) penDelKeyBtn.style.display = canDelKey ? '' : 'none';
+    }
+
+    // Remove the keyframe at the frame currently being edited (base frame 0 can't
+    // be deleted). The pose reverts to whatever the tween gives without that key.
+    function deleteEditKeyframe() {
+      if (!penEditing || !penEditBackup || penEditFrame <= 0) return;
+      const i = penEditKeys.findIndex(k => k.frame === penEditFrame);
+      if (i >= 0) penEditKeys.splice(i, 1);
+      loadEditPose(penEditFrame); // reload the interpolated pose (key now gone)
+      drawPenOverlay();
+      updateKeyframeMarkers();
     }
 
     // Catmull-Rom point blended toward the straight line by smoothness s (0..1).
@@ -2018,9 +2815,10 @@
 
       // Faint handles on committed paths so the user sees they can be edited.
       // The anchor nearest the cursor lights up (snap target) in Edit mode.
-      if (!penAnchors.length) {
+      // Hidden during playback so stale handles don't lag the morphing shape.
+      if (!penAnchors.length && !isPlaying) {
         for (let pi = 0; pi < penPaths.length; pi++) {
-          const anchors = penPaths[pi].anchors;
+          const anchors = committedAnchors(penPaths[pi]);
           for (let ai = 0; ai < anchors.length; ai++) {
             const a = anchors[ai];
             const hot = hoverCommitted && hoverCommitted.pi === pi && hoverCommitted.ai === ai;
@@ -2102,7 +2900,7 @@
     function penNearestCommitted(x, y) {
       let pi = -1, ai = -1, best = Infinity;
       for (let p = 0; p < penPaths.length; p++) {
-        const anchors = penPaths[p].anchors;
+        const anchors = committedAnchors(penPaths[p]);
         for (let i = 0; i < anchors.length; i++) {
           const d = Math.hypot(anchors[i].x - x, anchors[i].y - y);
           if (d < best) { best = d; pi = p; ai = i; }
@@ -2114,15 +2912,41 @@
     // Rebuild the live buffers from the free-draw layer + every committed path.
     function bakePathAcrossFrames(path) {
       const activeFrames = parseInt(framesSlider.value, 10);
-      const devAnchors = path.anchors.map(p => ({ x: p.x * dpr, y: p.y * dpr }));
-      const dense = penDensePath(devAnchors, path.closed, path.smoothness);
       const size = Math.max(2, path.size);
-      const dabs = penResample(dense, Math.max(1, size * dpr * 0.15));
-      const K = dabs.length;
-      if (K < 1) return;
       const rgb = hexToRgb(path.color);
       const dsize = size * dpr;
       const cs = path.curve || {};
+      const spacing = Math.max(1, size * dpr * 0.15);
+
+      if (pathIsAnimated(path)) {
+        // MORPH: every frame holds the FULL shape at its interpolated pose, so the
+        // loop tweens between keyframes.
+        for (let f = 0; f < activeFrames; f++) {
+          const anch = anchorsAtFrame(path, f, activeFrames);
+          if (!anch || anch.length < 2) continue;
+          const devAnchors = anch.map(p => ({ x: p.x * dpr, y: p.y * dpr }));
+          const dense = penDensePath(devAnchors, path.closed, path.smoothness);
+          const dabs = penResample(dense, spacing);
+          const K = dabs.length;
+          if (K < 1) continue;
+          const xnorm = activeFrames > 0 ? f / activeFrames : 0; // curve sampled at loop position
+          const m = computeModAtX(xnorm, cs.enabled, cs.param, cs.lut);
+          for (let k = 0; k < K; k++) {
+            let px = dabs[k].x, py = dabs[k].y;
+            if (m.noiseAmt > 0) { px += (Math.random() - 0.5) * m.noiseAmt; py += (Math.random() - 0.5) * m.noiseAmt; }
+            frameData[f].push(px, py, rgb[0], rgb[1], rgb[2], dsize * m.sizeMul, m.blurAdd, path.soft + m.softAdd, m.alphaMul);
+          }
+          frameNeedsUpdate[f] = true;
+        }
+        return;
+      }
+
+      // REVEAL (single pose): the stroke draws on progressively across the loop.
+      const devAnchors = path.anchors.map(p => ({ x: p.x * dpr, y: p.y * dpr }));
+      const dense = penDensePath(devAnchors, path.closed, path.smoothness);
+      const dabs = penResample(dense, spacing);
+      const K = dabs.length;
+      if (K < 1) return;
       for (let k = 0; k < K; k++) {
         const prog = K > 1 ? k / (K - 1) : 0;
         let f = Math.floor(prog * activeFrames);
@@ -2141,6 +2965,7 @@
     function rebakePen() {
       for (let f = 0; f < MAX_FRAMES; f++) { frameData[f] = freeData[f].slice(); frameNeedsUpdate[f] = true; }
       for (const path of penPaths) bakePathAcrossFrames(path);
+      markPadDirty();
     }
 
     // Pull a committed path back onto the canvas as the active, editable path.
@@ -2153,15 +2978,22 @@
     function beginEditPath(pathIndex, anchorIndex) {
       pushUndo(); // snapshot the original path before editing it
       const path = penPaths.splice(pathIndex, 1)[0];
-      penEditBackup = path; // restore this exact object if the edit is cancelled
-      penAnchors = path.anchors.map(p => ({ x: p.x, y: p.y }));
+      penEditBackup = clonePath(path); // restore this exact path if the edit is cancelled
       penClosed = path.closed;
       penSmoothness = path.smoothness;
+      // Working copies of the animation data; edits are stashed into these.
+      penEditBaseAnchors = path.anchors.map(p => ({ x: p.x, y: p.y }));
+      penEditKeys = (path.keys || []).map(k => ({ frame: k.frame, anchors: k.anchors.map(a => ({ x: a.x, y: a.y })) }));
+      // Park on the current frame and load its pose for editing.
+      editMode = true; isPlaying = false;
+      updateEditModeUI(); updatePlayBtn();
+      loadEditPose(currentFrame);
       penEditSettings = { color: path.color, size: path.size, soft: path.soft, curve: path.curve };
       syncSmoothSlider();
       rebakePen(); // remove it from the baked art; it now lives in the overlay
       if (typeof anchorIndex === 'number') penDragIndex = anchorIndex;
       drawPenOverlay();
+      updateKeyframeMarkers();
     }
 
     function penPointerDown(e) {
@@ -2223,6 +3055,7 @@
         penDragIndex = -1;
         try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
         drawPenOverlay();
+        updateKeyframeMarkers();
       }
     }
     window.addEventListener('pointerup', penPointerUp);
@@ -2232,6 +3065,9 @@
     canvas.addEventListener('contextmenu', (e) => {
       if (!penMode || !penAnchors.length) return;
       e.preventDefault();
+      // Anchor count is locked once a path is keyframed (each key must keep the
+      // same anchors); removing here would desync the poses.
+      if (penEditing && (penEditFrame !== 0 || penEditKeys.length)) return;
       const hit = penNearest(e.clientX, e.clientY);
       if (hit.idx >= 0 && hit.dist <= PEN_HIT) {
         penAnchors.splice(hit.idx, 1);
@@ -2257,6 +3093,7 @@
     function resetActivePen() {
       penAnchors = []; penDragIndex = -1; penClosed = false;
       penEditSettings = null; penEditBackup = null;
+      penEditKeys = []; penEditBaseAnchors = []; penEditFrame = 0;
     }
 
     // Cancel the active path. If we were re-editing a committed path, put it back.
@@ -2265,6 +3102,7 @@
       resetActivePen();
       penHoverPos = null;
       drawPenOverlay();
+      updateKeyframeMarkers();
     }
 
     // Finish the active path: store it as an editable path and bake it in.
@@ -2278,16 +3116,37 @@
         soft: parseFloat(softSlider.value),
         curve: currentCurveSnapshot()
       };
-      penPaths.push({
-        anchors: penAnchors.map(p => ({ x: p.x, y: p.y })),
-        closed: penClosed, smoothness: penSmoothness,
-        color: s.color, size: s.size, soft: s.soft,
-        curve: s.curve || currentCurveSnapshot()
-      });
+      let path;
+      if (penEditing) {
+        stashEditPose(); // fold the on-screen pose into the working base/keys
+        path = {
+          anchors: penEditBaseAnchors.map(p => ({ x: p.x, y: p.y })),
+          closed: penClosed, smoothness: penSmoothness,
+          color: s.color, size: s.size, soft: s.soft,
+          curve: s.curve || currentCurveSnapshot(),
+          keys: penEditKeys.map(k => ({ frame: k.frame, anchors: k.anchors.map(a => ({ x: a.x, y: a.y })) })),
+        };
+      } else {
+        path = {
+          anchors: penAnchors.map(p => ({ x: p.x, y: p.y })),
+          closed: penClosed, smoothness: penSmoothness,
+          color: s.color, size: s.size, soft: s.soft,
+          curve: s.curve || currentCurveSnapshot(),
+          keys: [],
+        };
+      }
+      const wasEditing = penEditing;
+      const animated = pathIsAnimated(path);
+      penPaths.push(path);
       resetActivePen();
       rebakePen();
-      if (!penEditing) { isPlaying = true; updatePlayBtn(); } // show the draw-on reveal
+      // New reveal path: play to show the draw-on. Edited path with keyframes:
+      // play the loop so the morph is visible immediately.
+      if (!wasEditing || animated) {
+        editMode = false; isPlaying = true; updateEditModeUI(); updatePlayBtn();
+      }
       drawPenOverlay();
+      updateKeyframeMarkers();
     }
 
     // Tool tabs select the active tool: Brush / Pen / Edit.
@@ -2315,6 +3174,7 @@
     // Floating Done/Cancel control (the reliable finish/exit path on touch).
     penDoneBtn.addEventListener('click', (e) => { e.preventDefault(); commitPenPath(); });
     penCancelBtn.addEventListener('click', (e) => { e.preventDefault(); clearPen(); });
+    penDelKeyBtn.addEventListener('click', (e) => { e.preventDefault(); deleteEditKeyframe(); });
 
     penSmoothSlider.addEventListener('input', () => {
       penSmoothness = parseInt(penSmoothSlider.value, 10) / 100;
@@ -2401,13 +3261,20 @@
     // --- Render Loop ---
     function tick() {
       const activeFrames = parseInt(framesSlider.value, 10);
-      const speed = parseFloat(speedSlider.value);
+      const speed = engineSpeed;
       
       let prevFrame = currentFrame;
       
       if (isPlaying) {
         playheadPos = (playheadPos + speed) % activeFrames;
         currentFrame = Math.floor(playheadPos);
+      }
+
+      // A queued pad swaps in exactly on the cycle boundary. The playhead is left
+      // untouched, so the sub-frame phase carries over and the clock never drifts.
+      // With the transport stopped there is no cycle to finish, so it lands at once.
+      if (padsMode && queuedPad >= 0 && (!isPlaying || currentFrame < prevFrame)) {
+        servicePadQueue();
       }
 
       if (firstParticleFrame !== null && prevFrame > currentFrame) {
@@ -2468,6 +3335,8 @@
           frameSteps[i].classList.remove('active');
         }
       }
+
+      if (padsMode) updatePadPlayhead(activeFrames);
 
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clearColor(0.0, 0.0, 0.0, 0.0);
