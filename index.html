@@ -1157,6 +1157,20 @@
               </div>
             </div>
           </div>
+          <div class="brush-tool-wrap" data-tip="Kaleido">
+            <button type="button" class="brush-tool" id="kaleido-btn" data-flyout="kaleido-flyout" aria-label="Kaleidoscope" aria-expanded="false">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="6"/>
+                <path d="M8 2v12M2.8 5.2l10.4 5.6M2.8 10.8l10.4-5.6"/>
+              </svg>
+            </button>
+            <div class="brush-flyout" id="kaleido-flyout">
+              <span class="val-display" id="val-kaleido">OFF</span>
+              <div class="vert-slider-wrap">
+                <input type="range" id="kaleido-slider" min="1" max="12" step="1" value="1">
+              </div>
+            </div>
+          </div>
         </div>
         </div>
       </div>
@@ -1464,6 +1478,8 @@
     const speedSlider = document.getElementById('speed-slider');
     const trailSlider = document.getElementById('trail-slider');
     const blurSlider = document.getElementById('blur-slider');
+    const kaleidoSlider = document.getElementById('kaleido-slider');
+    const kaleidoBtn = document.getElementById('kaleido-btn');
     const softSlider = document.getElementById('soft-slider');
     
     const valFrames = document.getElementById('val-frames');
@@ -1472,6 +1488,7 @@
     const valSoft = document.getElementById('val-soft');
     const valOpacity = document.getElementById('val-opacity');
     const valBlur = document.getElementById('val-blur');
+    const valKaleido = document.getElementById('val-kaleido');
     
     const bottomPanel = document.getElementById('bottom-panel');
     const timelineContainer = document.getElementById('timeline-container');
@@ -2078,6 +2095,7 @@
         blur: parseFloat(blurSlider.value),
         size: getBrushSize(),
         softness: parseFloat(softSlider.value),
+        kaleido: getKaleidoN(),
         color: colorPicker.value,
         background: bg,
         frameData: packFrameList(frameData, frames),
@@ -2264,6 +2282,7 @@
       setSliderValue(blurSlider, p.blur);
       setBrushSize(p.size);
       setSliderValue(softSlider, p.softness);
+      if (p.kaleido != null) setSliderValue(kaleidoSlider, p.kaleido);
       const safeColor = sanitizeColor(p.color);
       if (safeColor) {
         colorPicker.value = safeColor;
@@ -2778,6 +2797,16 @@
     softSlider.addEventListener('input', () => { valSoft.innerText = softSlider.value; });
     opacitySlider.addEventListener('input', () => { valOpacity.innerText = parseFloat(opacitySlider.value).toFixed(2); });
     blurSlider.addEventListener('input', () => { valBlur.innerText = blurSlider.value; });
+    kaleidoSlider.addEventListener('input', syncKaleidoUI);
+
+    function getKaleidoN() {
+      return Math.max(1, Math.min(12, parseInt(kaleidoSlider.value, 10) || 1));
+    }
+    function syncKaleidoUI() {
+      const n = getKaleidoN();
+      if (valKaleido) valKaleido.innerText = n < 2 ? 'OFF' : String(n);
+      if (kaleidoBtn) kaleidoBtn.classList.toggle('active', n >= 2);
+    }
 
     // --- Slider fill (shows filled portion of the track) ---
     function updateRangeFill(el) {
@@ -2803,6 +2832,7 @@
       valOpacity.innerText = parseFloat(opacitySlider.value).toFixed(2);
       valBlur.innerText = blurSlider.value;
       valTrail.innerText = trailSlider.value;
+      syncKaleidoUI();
       syncSwatch();
     }
 
@@ -2932,15 +2962,35 @@
       return [px, py, brushRgb[0], brushRgb[1], brushRgb[2], baseSize * m.sizeMul, m.blurAdd, baseSoft + m.softAdd, m.alphaMul];
     }
 
-    // Free-hand point: written to BOTH the live buffer and the free-draw store
-    // (so re-baking pen paths never wipes hand-drawn strokes).
-    function addFreePoint(frameIndex, x, y, xNorm) {
+    function writeFreeDab(frameIndex, x, y, xNorm) {
       const p = makeBakedPoint(x, y, frameIndex, xNorm);
       for (let i = 0; i < p.length; i++) { frameData[frameIndex].push(p[i]); freeData[frameIndex].push(p[i]); }
       frameNeedsUpdate[frameIndex] = true;
+    }
+
+    // Free-hand point: written to BOTH the live buffer and the free-draw store
+    // (so re-baking pen paths never wipes hand-drawn strokes).
+    function addFreePoint(frameIndex, x, y, xNorm) {
+      writeFreeDab(frameIndex, x, y, xNorm);
       markPadDirty();
       // In Morph the dabs are only a live preview; the polyline is what gets kept.
       if (morphActiveStroke) recordMorphPoint(x, y);
+      // Kaleidoscope: live-rotate (and reflect) this dab around the canvas centre.
+      // Skip Morph/Pen — those tools own their own geometry.
+      if (morphActiveStroke) return;
+      const n = getKaleidoN();
+      if (n < 2) return;
+      const cx = canvas.width * 0.5, cy = canvas.height * 0.5;
+      const dx = x - cx, dy = y - cy;
+      const slice = (Math.PI * 2) / n;
+      for (let k = 0; k < n; k++) {
+        const c = Math.cos(k * slice), s = Math.sin(k * slice);
+        if (k > 0) writeFreeDab(frameIndex, cx + dx * c - dy * s, cy + dx * s + dy * c, xNorm);
+        // Mirror across the first axis, then rotate — true kaleidoscope wedges.
+        const mx = cx + dx * c + dy * s;
+        const my = cy + dx * s - dy * c;
+        if (Math.hypot(mx - x, my - y) > 0.75) writeFreeDab(frameIndex, mx, my, xNorm);
+      }
     }
 
     // The recorded polyline is decimated so a pose stays light in memory while
