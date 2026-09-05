@@ -2584,11 +2584,20 @@
     // Write the cycle on the canvas into a pad. Only this ever fills a slot.
     function assignPad(i) {
       if (!liveBufferHasContent()) { flashPad(i, 'reject'); return; }
+      const composing = activePad < 0;
       padSlots[i] = snapshotState();
       padBufferDirty = false;
       activePad = i;
       flashPad(i, 'stored');
-      armNextFilledPad();
+      // A new drawing being stored must stay on this pad. Queuing the chain would
+      // snap back to pad 1 at the next wrap and make the next assignment impossible.
+      if (composing) {
+        padChain = false;
+        queuedPad = -1;
+        refreshPads();
+      } else {
+        armNextFilledPad();
+      }
     }
 
     // Launch a pad. Nothing happens on the spot: the swap is armed and lands when
@@ -2669,6 +2678,9 @@
     // in order (1→2→3→…) and skips empty slots.
     function servicePadQueue() {
       if (!padsMode) return;
+      // Nothing on air means the canvas is a new drawing waiting to be stored.
+      // Do not load pad 1 (or any pad) over it.
+      if (activePad < 0) return;
       let i = queuedPad;
       if (i < 0 && padChain) i = nextFilledPad(activePad);
       if (i < 0 || !padSlots[i] || i === activePad) return;
@@ -2706,7 +2718,6 @@
       queuedPad = -1;
       activePad = -1;
       padChain = true;
-      padBufferDirty = false;
 
       if (on) {
         // Every pad shares one cycle, so the frame count is fixed while in pads mode.
@@ -2718,8 +2729,17 @@
         buildPads();
         measurePadStrip();
         setTimeout(() => { if (padsMode) measurePadStrip(); }, 260); // after the morph settles
-        startPadChain();
+        // Keep a live drawing so it can be hold-assigned. Only start the pad
+        // chain when the canvas is empty (performance / playback).
+        if (liveBufferHasContent()) {
+          padBufferDirty = true;
+          refreshPads();
+        } else {
+          padBufferDirty = false;
+          startPadChain();
+        }
       } else {
+        padBufferDirty = false;
         framesSlider.disabled = false;
         framesLock.classList.add('hidden');
         timelineContainer.classList.remove('pads-mode');
@@ -2894,6 +2914,7 @@
       // keeps the sequence it stored; nothing on air is written back.
       if (padsMode) {
         activePad = -1;
+        queuedPad = -1;
         padBufferDirty = false;
         refreshPads();
       }
