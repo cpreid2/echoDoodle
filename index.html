@@ -4601,12 +4601,11 @@
       const maxBlur = parseFloat(blurSlider.value);
 
       if (editMode && morphMode) {
-        // Parked in Morph: do not show the baked hold/tween. After the first pose,
-        // switching to a new frame ghosts that pose (all its vertices) at ~12%
-        // grey so the next pose can be lined up — before anything is drawn here.
+        // Parked in Morph: ghost the previous pose at ~12% grey. Keep it up for
+        // the whole stay on this frame — drawing here must not dismiss it.
         const here = poseAt(currentFrame);
         const prev = previousMorphPose(currentFrame);
-        if (prev && !here) {
+        if (prev && prev.frame !== currentFrame) {
           drawFramePoints(prev.frame, 0.12, 0.0, 0.0, 1.0);
         }
         if (here) {
