@@ -134,12 +134,12 @@
       border-color: #45464c #101014 #101014 #45464c;
     }
     #pen-cancel:active { background: #333; }
-    #pen-delkey, #morph-delpose {
+    #morph-delpose {
       color: #2a1c00; background: var(--gold, #ffd54a);
       border-color: #ffe89a #8a6800 #6a5000 #ffe89a;
       text-shadow: 0 1px 0 rgba(255,255,255,0.3);
     }
-    #pen-delkey:active, #morph-delpose:active { background: #e6bd2f; }
+    #morph-delpose:active { background: #e6bd2f; }
     #morph-hold {
       color: #04140a; background: var(--led-on, #24d14a);
       border-color: #6cffa0 #0a5a24 #0a5a24 #6cffa0;
@@ -587,7 +587,7 @@
       display: flex; align-items: center; justify-content: center;
     }
 
-    /* The Brush title is split into three clickable tool tabs (Brush/Pen/Edit) */
+    /* The Brush title is split into clickable tool tabs (Brush/Pen/Morph) */
     .tool-tabs { gap: 4px; padding: 3px; }
     .tool-tab {
       flex: 1; cursor: pointer; user-select: none;
@@ -827,6 +827,95 @@
       background: radial-gradient(circle at 40% 30%, #ffe37a, var(--gold));
       border-color: #b8860b #6a5000 #4a3800 #8a6800; color: #3a2c00;
     }
+    .tap-tempo-btn {
+      width: 26px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .tap-tempo-btn svg {
+      width: 13px; height: 13px; display: block;
+      fill: none; stroke: currentColor; stroke-width: 2;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    /* Tap-tempo dialog */
+    #tap-overlay {
+      position: absolute; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.55);
+    }
+    #tap-dialog {
+      width: min(420px, calc(100vw - 32px));
+      background: var(--plastic-raised);
+      border: 3px solid; border-color: var(--bevel-raised);
+      border-radius: 16px; padding: 22px 22px 20px;
+      color: var(--ink); font-family: var(--font-mono);
+      box-shadow: 4px 8px 24px rgba(0,0,0,0.6), inset 0 1px 1px rgba(255,255,255,0.12);
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+    }
+    #tap-dialog-header {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+    }
+    #tap-dialog-title {
+      color: var(--plate-text); font-family: var(--font-display);
+      font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+    }
+    #tap-close {
+      background: var(--plastic-btn); border: 2px solid; border-color: var(--bevel-raised);
+      color: var(--ink); width: 26px; height: 26px; border-radius: 6px; cursor: pointer;
+      font-size: 16px; line-height: 1; padding: 0;
+    }
+    #tap-close:hover { background: var(--plastic-btn-hover); }
+    .tap-quant-row {
+      width: 100%; display: flex; align-items: center; gap: 10px;
+    }
+    .tap-quant-row label {
+      color: var(--ink-muted); font-size: 10px; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; flex: 0 0 auto;
+    }
+    #tap-quant {
+      -webkit-appearance: none; appearance: none; flex: 1;
+      padding: 6px 8px; border-radius: 5px;
+      background: rgba(0,0,0,0.35); color: var(--ink);
+      border: 2px solid; border-color: var(--bevel-inset);
+      font-family: var(--font-mono); font-weight: 700; font-size: 12px;
+      letter-spacing: 0.5px; cursor: pointer;
+    }
+    #tap-quant option { background: #26262b; color: #dcd8d0; }
+    #tap-pad {
+      width: 100%; aspect-ratio: 1; max-height: 280px;
+      border-radius: 18px; cursor: pointer; user-select: none;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+      background: var(--plastic-btn);
+      border: 3px solid; border-color: var(--bevel-raised);
+      box-shadow: 2px 4px 10px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.12);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+      color: var(--ink-muted);
+      font-family: var(--font-display); font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    #tap-pad:active, #tap-pad.hit {
+      background: radial-gradient(circle at 50% 40%, #2a4a32, #141417);
+      border-color: var(--bevel-inset);
+      box-shadow: inset 2px 3px 8px rgba(0,0,0,0.55);
+      color: var(--led-on);
+    }
+    #tap-pad-label { font-size: 14px; pointer-events: none; }
+    #tap-bpm-readout {
+      font-size: 42px; letter-spacing: 2px; min-height: 48px;
+      color: var(--lcd-text); font-family: var(--font-mono);
+      text-shadow: 0 0 12px rgba(143,240,168,0.55);
+      pointer-events: none;
+    }
+    #tap-hint {
+      font-size: 10px; color: var(--ink-muted); letter-spacing: 0.4px;
+      text-align: center; line-height: 1.45; opacity: 0.9;
+    }
+    #tap-overlay.keys-mode .tap-quant-row { display: none; }
+    body.tap-keys-open #bottom-panel { z-index: 51; }
+    #tap-keys-btn svg { fill: currentColor; stroke: none; }
+    #tap-pad.counting #tap-bpm-readout {
+      font-size: 72px; min-height: 80px; color: var(--led-on);
+    }
 
     /* Floating Curve Editor Panel */
     #curve-panel {
@@ -989,7 +1078,6 @@
   <!-- Floating Done/Cancel for the pen tool (touch-friendly finish/exit) -->
   <div id="pen-actions">
     <button id="pen-done" type="button">Done</button>
-    <button id="pen-delkey" type="button" style="display:none">Del Key</button>
     <button id="morph-hold" type="button" style="display:none" title="Keep the previous pose on this frame (hold, then morph after)">Hold</button>
     <button id="morph-delpose" type="button" style="display:none" title="Delete this pose">Delete?</button>
     <button id="pen-cancel" type="button">Cancel</button>
@@ -1034,6 +1122,29 @@
       <div class="about-title">echoDoodle</div>
       <div class="about-sub">made by Colin Reid</div>
       <button id="about-close">Close</button>
+    </div>
+  </div>
+
+  <div id="tap-overlay" class="hidden">
+    <div id="tap-dialog" role="dialog" aria-labelledby="tap-dialog-title">
+      <div id="tap-dialog-header">
+        <span id="tap-dialog-title">Tap Tempo</span>
+        <button type="button" id="tap-close" title="Close" aria-label="Close">&times;</button>
+      </div>
+      <div class="tap-quant-row" id="tap-quant-row">
+        <label for="tap-quant">Quantize</label>
+        <select id="tap-quant">
+          <option value="4" selected>1/4</option>
+          <option value="8">1/8</option>
+          <option value="16">1/16</option>
+          <option value="32">1/32</option>
+        </select>
+      </div>
+      <button type="button" id="tap-pad" aria-label="Tap the beat">
+        <span id="tap-pad-label">Tap to the beat</span>
+        <span id="tap-bpm-readout">&mdash;</span>
+      </button>
+      <div id="tap-hint">Tap along with the song. After a few beats, speed locks to that BPM divided by the quantize value (1/4 = one loop per bar).</div>
     </div>
   </div>
 
@@ -1115,7 +1226,6 @@
         <div class="col-title tool-tabs" id="tool-tabs">
           <button type="button" class="tool-tab active" data-tool="brush">Brush</button>
           <button type="button" class="tool-tab" data-tool="pen">Pen</button>
-          <button type="button" class="tool-tab" data-tool="edit">Edit</button>
           <button type="button" class="tool-tab" data-tool="morph" title="Draw poses, Hold them, drag the gold beads between diamonds to ease the in-betweens">Morph</button>
         </div>
         <div class="brush-tools">
@@ -1253,22 +1363,29 @@
       <div class="control-column">
         <div class="control-group">
           <span class="label">
-            <span style="display:flex; align-items:center;">
-              Frames<span id="frames-lock" class="lock-badge hidden">Locked</span>
+            <span style="display:flex; align-items:center; gap:6px;">
+              Frames
+              <button type="button" id="tap-keys-btn" class="toggle-btn tap-tempo-btn" aria-label="Tap morph keyframes" title="Tap to place morph keyframes">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 9-8 9-8-9z"/></svg>
+              </button>
+              <span id="frames-lock" class="lock-badge hidden">Locked</span>
             </span>
-            <span id="val-frames" class="val-display">30</span>
+            <span id="val-frames" class="val-display">60</span>
           </span>
-          <input type="range" id="frames-slider" min="10" max="180" value="30">
+          <input type="range" id="frames-slider" min="10" max="180" value="60">
         </div>
         <div class="control-group">
           <span class="label">
             <span style="display:flex; align-items:center; gap:6px;">
               Speed
-              <button id="tempo-toggle-btn" class="toggle-btn" aria-pressed="false" title="Toggle Speed/BPM">SPD</button>
+              <button id="tempo-toggle-btn" class="toggle-btn active" aria-pressed="true" title="Toggle Speed/BPM">BPM</button>
+              <button type="button" id="tap-tempo-btn" class="toggle-btn tap-tempo-btn" aria-label="Tap tempo" title="Tap tempo to a song">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+              </button>
             </span>
-            <input type="number" id="val-speed" class="val-display" value="0.7" step="0.1">
+            <input type="number" id="val-speed" class="val-display" value="120" step="1">
           </span>
-          <input type="range" id="speed-slider" min="0.1" max="2.0" step="0.1" value="0.7">
+          <input type="range" id="speed-slider" min="30" max="300" step="1" value="120">
         </div>
       </div>
     </div>
@@ -1399,11 +1516,15 @@
     
     let frameData = Array.from({ length: MAX_FRAMES }, () => []);
     // Free-hand strokes, kept separate from pen paths so committed paths stay
-    // editable. frameData = freeData + (every baked pen path). See rebakePen().
+    // editable. frameData = freeData + (every baked pen path). Morph bakes into
+    // morphData so it can play without the trail/echo. See rebakePen().
     let freeData = Array.from({ length: MAX_FRAMES }, () => []);
     let penPaths = []; // committed, re-editable paths: {anchors,closed,smoothness,color,size,soft}
     let frameNeedsUpdate = Array(MAX_FRAMES).fill(false);
     let frameBuffers = Array.from({ length: MAX_FRAMES }, () => gl.createBuffer());
+    let morphData = Array.from({ length: MAX_FRAMES }, () => []);
+    let morphNeedsUpdate = Array(MAX_FRAMES).fill(false);
+    let morphBuffers = Array.from({ length: MAX_FRAMES }, () => gl.createBuffer());
 
     // --- Morph poses (draw two frames, the engine fills the in-betweens) ------
     // A pose is the whole doodle captured at one frame as vector strokes. Every
@@ -1467,7 +1588,7 @@
       }
       penPaths = s.pens.map(clonePath);
       morphPoses = cloneMorphPoses(s.morph || []);
-      rebakePen(); // rebuild frameData from freeData + penPaths + morph poses
+      rebakePen(); // rebuild frameData + morphData from freeData, pen paths, poses
       if (typeof drawPenOverlay === 'function') drawPenOverlay();
       if (typeof updateKeyframeMarkers === 'function') updateKeyframeMarkers();
       updateUndoBtn();
@@ -1487,8 +1608,8 @@
     let isSyncActive = false;
 
     // --- Engine Tempo State ---
-    let engineSpeed = 0.7;
-    let isBpmMode = false;
+    let engineSpeed = 0.5; // 120 BPM at 60 frames, 1/4 quant
+    let isBpmMode = true;
     
     // UI Elements
     const tempoToggleBtn = document.getElementById('tempo-toggle-btn');
@@ -1574,20 +1695,27 @@
     let padArm = null;            // in-progress hold-to-assign gesture
 
     // --- BPM & Tempo Helpers ---
+    // Musical BPM is quantized onto the loop: 1/4 means one loop = 4 beats
+    // (a 4/4 bar). Without that, 120 BPM treats the whole timeline as one beat
+    // and races to the end.
+    let tempoQuant = 4;
     function getBpm() {
       const f = parseInt(framesSlider.value, 10);
-      return (engineSpeed * 3600) / f;
+      const q = tempoQuant || 4;
+      return (engineSpeed * 3600 * q) / f;
     }
     
     function setBpm(bpm) {
       const f = parseInt(framesSlider.value, 10);
-      engineSpeed = (bpm * f) / 3600;
+      const q = tempoQuant || 4;
+      engineSpeed = Math.max(0.1, Math.min(2.0, (bpm * f) / (3600 * q)));
     }
 
     function updateTempoUI() {
       if (isBpmMode) {
         tempoToggleBtn.innerText = 'BPM';
         tempoToggleBtn.classList.add('active');
+        tempoToggleBtn.setAttribute('aria-pressed', 'true');
         speedSlider.min = 30;
         speedSlider.max = 300;
         speedSlider.step = 1;
@@ -1598,6 +1726,7 @@
       } else {
         tempoToggleBtn.innerText = 'SPD';
         tempoToggleBtn.classList.remove('active');
+        tempoToggleBtn.setAttribute('aria-pressed', 'false');
         speedSlider.min = 0.1;
         speedSlider.max = 2.0; 
         speedSlider.step = 0.1;
@@ -1633,6 +1762,277 @@
         engineSpeed = Math.max(0.1, Math.min(2.0, val));
       }
       updateTempoUI();
+    });
+
+    // --- Tap pad: tempo (SPD) or morph keyframes (Frames) ---
+    const tapOverlay = document.getElementById('tap-overlay');
+    const tapDialog = document.getElementById('tap-dialog');
+    const tapPad = document.getElementById('tap-pad');
+    const tapClose = document.getElementById('tap-close');
+    const tapQuant = document.getElementById('tap-quant');
+    const tapBpmReadout = document.getElementById('tap-bpm-readout');
+    const tapPadLabel = document.getElementById('tap-pad-label');
+    const tapHint = document.getElementById('tap-hint');
+    const tapDialogTitle = document.getElementById('tap-dialog-title');
+    const tapTempoBtn = document.getElementById('tap-tempo-btn');
+    const tapKeysBtn = document.getElementById('tap-keys-btn');
+    const TAP_MIN = 4;
+    const TAP_MAX_GAP = 1800;
+    const TAP_MIN_GAP = 120;
+    const TAP_KEYS_COUNT = 4;
+    let tapMode = 'tempo'; // 'tempo' | 'keys'
+    let tapTimes = [];
+    let lastTappedBpm = 0;
+    let tapHitTimer = 0;
+    let tapAudioCtx = null;
+    let tapKeysPhase = 'idle'; // idle | countin | record
+    let tapKeysElapsed = 0;
+    let tapKeysLastBeat = -1;
+    let lastKeyTapAt = 0;
+    const TAP_TEMPO_HINT = 'Tap along with the song. After a few beats, speed locks to that BPM divided by the quantize value (1/4 = one loop per bar).';
+    const TAP_KEYS_HINT = 'Tap to rewind and count in with the loop. After 4, tap along with the song to drop morph diamonds on the timeline.';
+
+    function flashTapPad() {
+      tapPad.classList.add('hit');
+      clearTimeout(tapHitTimer);
+      tapHitTimer = setTimeout(() => tapPad.classList.remove('hit'), 90);
+    }
+    function ensureTapAudio() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      if (!tapAudioCtx) tapAudioCtx = new AC();
+      if (tapAudioCtx.state === 'suspended') tapAudioCtx.resume();
+      return tapAudioCtx;
+    }
+    function playMetronomeClick(accent) {
+      const ctx = ensureTapAudio();
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(accent ? 1320 : 880, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(accent ? 0.22 : 0.12, t + 0.001);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
+      osc.connect(g);
+      g.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.08);
+    }
+    function tapKeysFramesPerBeat() {
+      const n = parseInt(framesSlider.value, 10);
+      const q = tempoQuant || 4;
+      return n / q;
+    }
+    function tapKeysLive() {
+      return tapMode === 'keys' && (tapKeysPhase === 'countin' || tapKeysPhase === 'record');
+    }
+    function resetTapKeysTake() {
+      tapKeysPhase = 'idle';
+      tapKeysElapsed = 0;
+      tapKeysLastBeat = -1;
+      tapPad.classList.remove('counting');
+    }
+    function clearMorphKeysForTap() {
+      if (morphPoses.length) {
+        pushUndo();
+        morphPoses = [];
+        morphKeySelected = -1;
+        rebakePen();
+        updateKeyframeMarkers();
+        if (typeof updatePenActions === 'function') updatePenActions();
+      }
+    }
+    function startTapKeysCountIn() {
+      ensureTapAudio();
+      clearMorphKeysForTap();
+      resetTapKeysTake();
+      tapKeysPhase = 'countin';
+      playheadPos = 0;
+      currentFrame = 0;
+      editMode = false;
+      isPlaying = true;
+      updateEditModeUI();
+      updatePlayBtn();
+      tapPad.classList.add('counting');
+      tapPadLabel.textContent = 'Count in';
+      tapBpmReadout.textContent = String(TAP_KEYS_COUNT);
+      tapKeysLastBeat = 0;
+      playMetronomeClick(false);
+      flashTapPad();
+    }
+    function finishTapKeysCountIn() {
+      tapKeysPhase = 'record';
+      tapPad.classList.remove('counting');
+      tapPadLabel.textContent = 'Tap poses';
+      tapBpmReadout.textContent = '0';
+    }
+    function serviceTapKeysCountIn(speed) {
+      if (tapKeysPhase !== 'countin') return;
+      tapKeysElapsed += speed;
+      const fpb = tapKeysFramesPerBeat();
+      if (!(fpb > 0)) { finishTapKeysCountIn(); return; }
+      const beat = Math.floor(tapKeysElapsed / fpb);
+      if (beat > tapKeysLastBeat && beat < TAP_KEYS_COUNT) {
+        tapKeysLastBeat = beat;
+        const remaining = TAP_KEYS_COUNT - beat;
+        tapBpmReadout.textContent = String(remaining);
+        playMetronomeClick(beat === TAP_KEYS_COUNT - 1);
+        flashTapPad();
+      }
+      if (tapKeysElapsed >= TAP_KEYS_COUNT * fpb) finishTapKeysCountIn();
+    }
+    function addTappedMorphKey() {
+      if (tapKeysPhase !== 'record') return;
+      const now = performance.now();
+      if (now - lastKeyTapAt < TAP_MIN_GAP) return;
+      lastKeyTapAt = now;
+      const n = parseInt(framesSlider.value, 10);
+      let f = Math.round(playheadPos);
+      if (f >= n) f = 0;
+      if (f < 0) f = 0;
+      if (poseAt(f)) return;
+      morphPoses.push({ frame: f, strokes: [], kern: { ease: 0.7, bias: 0 } });
+      morphPoses.sort((a, b) => a.frame - b.frame);
+      updateKeyframeMarkers();
+      tapPadLabel.textContent = 'Keys';
+      tapBpmReadout.textContent = String(morphPoses.length);
+    }
+    function finishTapKeysSession() {
+      const hadTake = tapKeysPhase !== 'idle';
+      resetTapKeysTake();
+      if (!hadTake) return;
+      if (typeof setPenTool === 'function' && penTool !== 'morph') setPenTool('morph');
+      else {
+        isPlaying = false;
+        editMode = true;
+        updateEditModeUI();
+        updatePlayBtn();
+      }
+      const first = morphPoses.slice().sort((a, b) => a.frame - b.frame)[0];
+      if (typeof parkPlayhead === 'function') parkPlayhead(first ? first.frame : 0);
+      updateKeyframeMarkers();
+      if (typeof updatePenActions === 'function') updatePenActions();
+    }
+
+    function openTapOverlay(mode) {
+      const next = mode === 'keys' ? 'keys' : 'tempo';
+      if (tapMode === 'keys' && next !== 'keys') finishTapKeysSession();
+      tapMode = next;
+      tapTimes = [];
+      resetTapKeysTake();
+      tapOverlay.classList.toggle('keys-mode', tapMode === 'keys');
+      document.body.classList.toggle('tap-keys-open', tapMode === 'keys');
+      tapTempoBtn.classList.toggle('active', tapMode === 'tempo');
+      if (tapKeysBtn) tapKeysBtn.classList.toggle('active', tapMode === 'keys');
+      if (tapDialogTitle) tapDialogTitle.textContent = tapMode === 'keys' ? 'Tap Keys' : 'Tap Tempo';
+      if (tapHint) tapHint.textContent = tapMode === 'keys' ? TAP_KEYS_HINT : TAP_TEMPO_HINT;
+      if (tapQuant) tapQuant.value = String(tempoQuant || 4);
+      if (tapMode === 'keys') {
+        clearMorphKeysForTap();
+        if (tapPadLabel) tapPadLabel.textContent = 'Tap to start';
+        if (tapBpmReadout) tapBpmReadout.textContent = '—';
+        playheadPos = 0;
+        currentFrame = 0;
+        isPlaying = false;
+        updatePlayBtn();
+      } else {
+        lastTappedBpm = 0;
+        if (tapPadLabel) tapPadLabel.textContent = 'Tap to the beat';
+        if (tapBpmReadout) tapBpmReadout.textContent = '—';
+      }
+      tapOverlay.classList.remove('hidden');
+    }
+    function closeTapOverlay() {
+      const closingKeys = tapMode === 'keys';
+      tapOverlay.classList.add('hidden');
+      tapOverlay.classList.remove('keys-mode');
+      document.body.classList.remove('tap-keys-open');
+      tapTempoBtn.classList.remove('active');
+      if (tapKeysBtn) tapKeysBtn.classList.remove('active');
+      tapTimes = [];
+      tapPad.classList.remove('counting', 'hit');
+      if (closingKeys) finishTapKeysSession();
+      else resetTapKeysTake();
+    }
+    function tapQuantDenom() {
+      const n = parseInt(tapQuant && tapQuant.value, 10);
+      return (n === 8 || n === 16 || n === 32) ? n : 4;
+    }
+    function applyTappedBpm(bpm) {
+      if (!(bpm > 0)) return;
+      tempoQuant = tapQuantDenom();
+      lastTappedBpm = bpm;
+      isBpmMode = true;
+      setBpm(bpm);
+      updateTempoUI();
+    }
+    function registerTempoTap() {
+      const now = performance.now();
+      const last = tapTimes.length ? tapTimes[tapTimes.length - 1] : 0;
+      if (last && now - last < TAP_MIN_GAP) return;
+      if (last && now - last > TAP_MAX_GAP) tapTimes = [];
+      tapTimes.push(now);
+      if (tapTimes.length > 12) tapTimes.shift();
+      flashTapPad();
+
+      if (tapTimes.length < TAP_MIN) {
+        tapPadLabel.textContent = 'Keep tapping…';
+        tapBpmReadout.textContent = tapTimes.length + ' / ' + TAP_MIN;
+        return;
+      }
+      const intervals = [];
+      for (let i = 1; i < tapTimes.length; i++) intervals.push(tapTimes[i] - tapTimes[i - 1]);
+      intervals.sort((a, b) => a - b);
+      const mid = intervals[Math.floor(intervals.length / 2)];
+      const bpm = Math.round(60000 / mid);
+      const clamped = Math.max(30, Math.min(300, bpm));
+      tapPadLabel.textContent = 'BPM';
+      tapBpmReadout.textContent = String(clamped);
+      applyTappedBpm(clamped);
+    }
+    function registerTap() {
+      if (tapMode === 'keys') {
+        flashTapPad();
+        if (tapKeysPhase === 'idle') startTapKeysCountIn();
+        else if (tapKeysPhase === 'record') addTappedMorphKey();
+        return;
+      }
+      registerTempoTap();
+    }
+
+    tapTempoBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (tapOverlay.classList.contains('hidden')) openTapOverlay('tempo');
+      else if (tapMode === 'tempo') closeTapOverlay();
+      else openTapOverlay('tempo');
+    });
+    if (tapKeysBtn) tapKeysBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (tapOverlay.classList.contains('hidden')) openTapOverlay('keys');
+      else if (tapMode === 'keys') closeTapOverlay();
+      else openTapOverlay('keys');
+    });
+    tapClose.addEventListener('click', (e) => { e.preventDefault(); closeTapOverlay(); });
+    tapOverlay.addEventListener('click', (e) => { if (e.target === tapOverlay) closeTapOverlay(); });
+    tapDialog.addEventListener('pointerdown', (e) => e.stopPropagation());
+    tapPad.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      registerTap();
+    });
+    tapQuant.addEventListener('change', () => {
+      tempoQuant = tapQuantDenom();
+      if (lastTappedBpm > 0) applyTappedBpm(lastTappedBpm);
+      else updateTempoUI();
+    });
+    window.addEventListener('keydown', (e) => {
+      if (tapOverlay.classList.contains('hidden')) return;
+      if (e.key === 'Escape') { e.preventDefault(); closeTapOverlay(); return; }
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        registerTap();
+      }
     });
 
     // --- Animation settings (gear) ---
@@ -2145,6 +2545,7 @@
         floatsPerPoint: floatsPerPoint,
         frameCount: frames,
         speed: engineSpeed,
+        tempoQuant: tempoQuant,
         trail: parseInt(trailSlider.value, 10),
         opacity: parseFloat(opacitySlider.value),
         blur: parseFloat(blurSlider.value),
@@ -2332,6 +2733,10 @@
       valFrames.innerText = frames;
       trailSlider.max = frames;
       engineSpeed = Number.isFinite(p.speed) ? Math.max(0.1, Math.min(2.0, p.speed)) : 0.7;
+      if (p.tempoQuant === 8 || p.tempoQuant === 16 || p.tempoQuant === 32 || p.tempoQuant === 4) {
+        tempoQuant = p.tempoQuant;
+        if (tapQuant) tapQuant.value = String(tempoQuant);
+      }
       updateTempoUI();
       setSliderValue(trailSlider, p.trail);
       setSliderValue(opacitySlider, p.opacity);
@@ -2442,7 +2847,11 @@
         freeData = unpackLayer(p.freeLayer);
         rebakePen();
       } else {
-        for (let i = 0; i < MAX_FRAMES; i++) freeData[i] = frameData[i].slice();
+        for (let i = 0; i < MAX_FRAMES; i++) {
+          freeData[i] = frameData[i].slice();
+          morphData[i] = [];
+          morphNeedsUpdate[i] = true;
+        }
       }
       if (typeof clearPen === 'function') clearPen();
       if (typeof updateKeyframeMarkers === 'function') updateKeyframeMarkers();
@@ -2966,8 +3375,6 @@
       updateRangeFill(trailSlider);
     }
 
-    let trailBeforeMorph = null;
-
     function syncTrailRange() {
       const f = parseInt(framesSlider.value, 10);
       trailSlider.max = f;
@@ -3137,7 +3544,9 @@
       for(let i=0; i<MAX_FRAMES; i++) {
         frameData[i] = [];
         freeData[i] = [];
+        morphData[i] = [];
         frameNeedsUpdate[i] = true;
+        morphNeedsUpdate[i] = true;
       }
       penPaths = [];
       morphPoses = [];
@@ -3460,7 +3869,7 @@
     const valSmooth = document.getElementById('val-smooth');
     const penSmoothGroup = document.getElementById('pen-smooth-group');
 
-    // Tool cycles Brush -> Pen -> Edit. penMode = any pen tool active.
+    // Tools: Brush, Pen, Morph. penMode = pen tool active.
     let penTool = 'brush';
     let penMode = false;        // penTool !== 'brush'
     let penEditing = false;     // penTool === 'edit' (adjust existing anchors only)
@@ -3699,7 +4108,6 @@
     const penActions = document.getElementById('pen-actions');
     const penDoneBtn = document.getElementById('pen-done');
     const penCancelBtn = document.getElementById('pen-cancel');
-    const penDelKeyBtn = document.getElementById('pen-delkey');
     const morphDelPoseBtn = document.getElementById('morph-delpose');
     const morphHoldBtn = document.getElementById('morph-hold');
     function updatePenActions() {
@@ -3713,9 +4121,6 @@
       penActions.style.display = (active || canHold || canDelPose) ? 'flex' : 'none';
       penDoneBtn.style.display = active ? '' : 'none';
       penCancelBtn.style.display = active ? '' : 'none';
-      // "Del Key" appears when editing a keyframe (any frame past the base).
-      const canDelKey = active && penEditing && penEditBackup && penEditFrame > 0;
-      if (penDelKeyBtn) penDelKeyBtn.style.display = canDelKey ? '' : 'none';
       if (morphHoldBtn) morphHoldBtn.style.display = canHold ? '' : 'none';
       if (morphDelPoseBtn) morphDelPoseBtn.style.display = canDelPose ? '' : 'none';
     }
@@ -4092,13 +4497,13 @@
       const xnorm = activeFrames > 0 ? f / activeFrames : 0;
       const cs = st.curve || {};
       const m = computeModAtX(xnorm, cs.enabled, cs.param, cs.lut);
-      const data = frameData[f];
+      const data = morphData[f];
       for (const p of st.points) {
         let px = p.x, py = p.y;
         if (m.noiseAmt > 0) { px += (Math.random() - 0.5) * m.noiseAmt; py += (Math.random() - 0.5) * m.noiseAmt; }
         data.push(px, py, st.rgb[0], st.rgb[1], st.rgb[2], st.size * m.sizeMul, m.blurAdd, st.soft + m.softAdd, st.alpha * m.alphaMul);
       }
-      frameNeedsUpdate[f] = true;
+      morphNeedsUpdate[f] = true;
     }
 
     function bakeMorph() {
@@ -4139,7 +4544,12 @@
     }
 
     function rebakePen() {
-      for (let f = 0; f < MAX_FRAMES; f++) { frameData[f] = freeData[f].slice(); frameNeedsUpdate[f] = true; }
+      for (let f = 0; f < MAX_FRAMES; f++) {
+        frameData[f] = freeData[f].slice();
+        frameNeedsUpdate[f] = true;
+        morphData[f] = [];
+        morphNeedsUpdate[f] = true;
+      }
       for (const path of penPaths) bakePathAcrossFrames(path);
       bakeMorph();
       markPadDirty();
@@ -4337,15 +4747,16 @@
       updateKeyframeMarkers();
     }
 
-    // Tool tabs select the active tool: Brush / Pen / Edit / Morph.
+    // Tool tabs select the active tool: Brush / Pen / Morph.
     function setPenTool(tool) {
+      if (tool === 'edit') tool = 'pen';
       if (tool === penTool) return;
       if (penMode) commitPenPath();   // finalize any in-progress path first
       if (morphActiveStroke) morphEndStroke();
       const leavingMorph = morphMode && tool !== 'morph';
       penTool = tool;
-      penMode = (tool === 'pen' || tool === 'edit');
-      penEditing = tool === 'edit';
+      penMode = tool === 'pen';
+      penEditing = false;
       morphMode = tool === 'morph';
       if (!morphMode) morphKeySelected = -1;
       bottomPanel.classList.toggle('morphing', morphMode);
@@ -4357,27 +4768,19 @@
         const smoothBtn = penSmoothGroup.querySelector('.brush-tool[data-flyout]');
         if (smoothBtn) { smoothBtn.classList.remove('active'); smoothBtn.setAttribute('aria-expanded', 'false'); }
       }
-      // Show the real cursor in Edit mode; the others use their on-canvas rings.
-      canvas.style.cursor = penEditing ? 'default' : 'none';
+      canvas.style.cursor = 'none';
       toolTabBtns.forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
       if (penMode) {
         hideBrushPreview();
         syncSmoothSlider();
       }
-      if (tool === 'edit') { isPlaying = false; updatePlayBtn(); } // static canvas while editing
       if (morphMode) {
         // Park on a frame so the first pose lands somewhere definite.
-        if (trailBeforeMorph == null) trailBeforeMorph = parseInt(trailSlider.value, 10) || 0;
-        setTrailLength(0);
         isPlaying = false;
         editMode = true;
         updateEditModeUI();
         updatePlayBtn();
       } else if (leavingMorph) {
-        if (trailBeforeMorph != null) {
-          setTrailLength(trailBeforeMorph);
-          trailBeforeMorph = null;
-        }
         if (morphPoses.length > 1) {
           // Leaving Morph with two poses: play so the tween is visible immediately.
           editMode = false;
@@ -4396,7 +4799,6 @@
     // Floating Done/Cancel control (the reliable finish/exit path on touch).
     penDoneBtn.addEventListener('click', (e) => { e.preventDefault(); commitPenPath(); });
     penCancelBtn.addEventListener('click', (e) => { e.preventDefault(); clearPen(); });
-    penDelKeyBtn.addEventListener('click', (e) => { e.preventDefault(); deleteEditKeyframe(); });
     morphDelPoseBtn.addEventListener('click', (e) => { e.preventDefault(); deleteMorphPose(); });
     if (morphHoldBtn) morphHoldBtn.addEventListener('click', (e) => { e.preventDefault(); holdMorphPose(); });
 
@@ -4467,14 +4869,20 @@
     }
 
     function drawFramePoints(frameIndex, alpha, blur, sizeOffset, grey) {
-      const data = frameData[frameIndex];
+      drawLayerPoints(frameData, frameBuffers, frameNeedsUpdate, frameIndex, alpha, blur, sizeOffset, grey);
+    }
+    function drawMorphPoints(frameIndex, alpha, blur, sizeOffset, grey) {
+      drawLayerPoints(morphData, morphBuffers, morphNeedsUpdate, frameIndex, alpha, blur, sizeOffset, grey);
+    }
+    function drawLayerPoints(dataArr, bufArr, needsArr, frameIndex, alpha, blur, sizeOffset, grey) {
+      const data = dataArr[frameIndex];
       const numPoints = data.length / floatsPerPoint;
       if (numPoints === 0) return;
 
-      gl.bindBuffer(gl.ARRAY_BUFFER, frameBuffers[frameIndex]);
-      if (frameNeedsUpdate[frameIndex]) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufArr[frameIndex]);
+      if (needsArr[frameIndex]) {
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(data), gl.DYNAMIC_DRAW);
-        frameNeedsUpdate[frameIndex] = false;
+        needsArr[frameIndex] = false;
       }
       bindPointAttribs();
       gl.uniform1f(u_alpha, alpha);
@@ -4501,6 +4909,11 @@
     function tick() {
       const activeFrames = parseInt(framesSlider.value, 10);
       const speed = engineSpeed;
+
+      if (typeof tapKeysLive === 'function' && tapKeysLive()) {
+        isPlaying = true;
+        editMode = false;
+      }
       
       let prevFrame = currentFrame;
       
@@ -4508,6 +4921,8 @@
         playheadPos = (playheadPos + speed) % activeFrames;
         currentFrame = Math.floor(playheadPos);
       }
+
+      if (typeof serviceTapKeysCountIn === 'function') serviceTapKeysCountIn(speed);
 
       // Filled pads chain in order on the cycle boundary only. Pausing must not
       // advance the queue (armNextFilledPad would otherwise fire every frame).
@@ -4606,20 +5021,17 @@
         const here = poseAt(currentFrame);
         const prev = previousMorphPose(currentFrame);
         if (prev && prev.frame !== currentFrame) {
-          drawFramePoints(prev.frame, 0.12, 0.0, 0.0, 1.0);
+          drawMorphPoints(prev.frame, 0.12, 0.0, 0.0, 1.0);
         }
-        if (here) {
-          drawFramePoints(currentFrame, 1.0, 0.0, 0.0, 0.0);
-        } else if (morphActiveStroke && morphStrokeStart != null) {
-          const preview = freeData[currentFrame].slice(morphStrokeStart);
-          drawPointList(preview, 1.0, 0.0, 0.0, 0.0);
-        }
+        drawFramePoints(currentFrame, 1.0, 0.0, 0.0, 0.0);
+        if (here) drawMorphPoints(currentFrame, 1.0, 0.0, 0.0, 0.0);
       } else if (editMode) {
         const prevI = ((currentFrame - 1) % activeFrames + activeFrames) % activeFrames;
         if (prevI !== currentFrame) {
           drawFramePoints(prevI, 0.18, 0.0, 0.0, 1.0);
         }
         drawFramePoints(currentFrame, 1.0, 0.0, 0.0, 0.0);
+        drawMorphPoints(currentFrame, 1.0, 0.0, 0.0, 0.0);
       } else {
         for (let dist = trailLength; dist >= 0; dist--) {
           const frameIndex = ((currentFrame - dist) % activeFrames + activeFrames) % activeFrames;
@@ -4636,6 +5048,8 @@
 
           drawFramePoints(frameIndex, alpha, blur, 0.0);
         }
+        // Morph plays on the current frame only — no trail/echo.
+        drawMorphPoints(currentFrame, 1.0, 0.0, 0.0, 0.0);
       }
 
       if (!editMode && firstParticle && !hasCompletedFirstCycle) {
