@@ -3023,6 +3023,7 @@
     function flashFrameToast(hold) {
       const el = document.getElementById('frame-toast');
       if (!el || padsMode) return;
+      const n = timelineFrameCount();
       el.textContent = (currentFrame + 1) + ' / ' + n;
       el.classList.add('show');
       clearTimeout(frameToastTimer);
@@ -3200,7 +3201,7 @@
         const pad = document.createElement('div');
         pad.className = 'pad';
         pad.dataset.index = i;
-        pad.title = 'Hold to store the current cycle \u00b7 Tap to queue it';
+        pad.title = 'Hold to store the current cycle \u00b7 Tap to play it';
         pad.innerHTML =
           '<div class="pad-prog"></div><div class="pad-arm"></div>' +
           '<div class="pad-led"></div>' +
@@ -3295,10 +3296,10 @@
       }
     }
 
-    // Launch a pad. Nothing happens on the spot: the swap is armed and lands when
-    // the running cycle wraps, so the clock never stutters. Pressing the pad on
-    // air (or the queued pad again) cancels a pending jump; the filled-pad chain
-    // then continues from whatever is on air.
+    // Launch a pad. If another pad is already on air the swap is armed and lands
+    // when the running cycle wraps, so the clock never stutters. If nothing is on
+    // air (or playback is paused), the tap starts that sequence immediately.
+    // Pressing the pad on air cancels a pending jump.
     function nextFilledPad(from) {
       const start = from < 0 ? -1 : from;
       for (let step = 1; step <= MAX_PADS; step++) {
@@ -3340,7 +3341,9 @@
         refreshPads();
         return;
       }
-      if (!isPlaying) {
+      // Queue only works while a pad is already on air (swap lands on wrap).
+      // After leaving pads and coming back, nothing is on air — launch now.
+      if (!isPlaying || activePad < 0) {
         loadPadSequence(i);
         playheadPos = 0;
         currentFrame = 0;
