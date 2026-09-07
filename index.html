@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>echoDoodle</title>
   <style>
     :root {
@@ -192,12 +192,14 @@
       position: relative;
       z-index: 3;
       display: flex; align-items: center; gap: 12px; width: 100%;
+      min-width: 0;
       overflow: visible;
     }
     #timeline-wrap {
       position: relative;
       flex-grow: 1; min-width: 0;
       overflow: visible;
+      --seq-t: 0;
     }
     /* Morph kern rail: beads between keyframe diamonds. Drag sideways to linger
        on a pose, drag up for slow-in/slow-out (organic), down for linear. */
@@ -210,68 +212,106 @@
     #bottom-panel.morphing #morph-kern-rail { display: block; }
     #timeline-wrap.pads-on #morph-kern-rail { display: none !important; }
 
-    /* Quantized Timeline — recessed LED strip */
+    /* Quantized Timeline — sequencer groove (beat grid + traveling playhead) */
     #timeline-container {
-      display: flex; gap: 2px; height: 22px; flex-grow: 1;
-      padding: 4px 5px; border-radius: 6px;
-      touch-action: none; /* let finger-drag scrub instead of scroll */
+      display: block;
+      position: relative;
+      width: 100%;
+      height: 26px;
+      min-width: 0;
+      padding: 0;
+      border-radius: 6px;
+      touch-action: none;
+      --seq-beats: 4;
+      --seq-divs: 16;
+      --seq-t: 0;
       background: linear-gradient(180deg, #0c0c0e 0%, #17171a 100%);
       border: 2px solid; border-color: #050506 #35353a #3a3a40 #0a0a0c;
       box-shadow: inset 0 2px 6px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.25);
+      cursor: pointer;
+      transition: height 0.22s ease, gap 0.22s ease, padding 0.22s ease;
     }
-
-    /* Each segment is a flat LED cell: dim when off, glowing when lit.
-       The dark housing gap between cells keeps them distinct at any frame count. */
-    .frame-step {
-      flex: 1 1 0; min-width: 2px; border-radius: 1px;
-      background: var(--led-off);
-      cursor: pointer; position: relative;
-      transition: background 0.08s ease, box-shadow 0.08s ease;
+    #seq-track {
+      position: absolute; inset: 4px 6px;
+      overflow: visible; pointer-events: none;
     }
-
-    .frame-step:hover {
-      background: #1f6b34;
+    #seq-progress {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      width: calc(var(--seq-t) * 100%);
+      background: linear-gradient(180deg, rgba(0,255,65,0.18) 0%, rgba(0,255,65,0.05) 100%);
+      border-right: 1px solid rgba(157,255,181,0.35);
+      pointer-events: none;
     }
-
-    /* Keyframe marker (gold diamond) for morph poses and pen keys */
-    .frame-step.has-key::after {
-      content: ""; position: absolute; left: 50%; top: -6px;
-      width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg);
+    #seq-grid {
+      position: absolute; inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(90deg, rgba(0,255,65,0.10) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,65,0.38) 2px, transparent 2px);
+      background-size:
+        calc(100% / var(--seq-divs)) 100%,
+        calc(100% / var(--seq-beats)) 100%;
+      background-repeat: repeat-x;
+      opacity: 0.95;
+    }
+    #seq-playhead {
+      position: absolute; top: -1px; bottom: -1px;
+      width: 7px;
+      left: calc(var(--seq-t) * 100%);
+      transform: translateX(-50%);
+      border-radius: 2px;
+      background: var(--led-on);
+      box-shadow: 0 0 8px 1px var(--led-glow);
+      z-index: 4;
+      pointer-events: none;
+    }
+    #frame-toast {
+      position: absolute;
+      left: calc(6px + var(--seq-t) * (100% - 12px));
+      bottom: calc(100% + 8px);
+      transform: translateX(-50%);
+      color: var(--lcd-text); font-size: 11px; letter-spacing: 1px; font-weight: 700;
+      font-family: var(--font-mono); text-transform: uppercase;
+      white-space: nowrap; text-align: center;
+      padding: 1px 6px; border-radius: 3px;
+      background: var(--lcd-bg);
+      border: 1px solid #05070a;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.35);
+      text-shadow: 0 0 5px rgba(143,240,168,0.65);
+      opacity: 0; pointer-events: none; z-index: 10;
+      transition: opacity 0.45s ease;
+    }
+    #frame-toast.show { opacity: 1; transition: opacity 0.08s ease; }
+    #timeline-wrap.pads-on #frame-toast { display: none; }
+    #bottom-panel.playing #seq-playhead {
+      background: var(--led-on);
+      box-shadow: 0 0 10px 2px var(--led-glow);
+    }
+    #bottom-panel.editing #seq-playhead {
+      background: radial-gradient(circle at 50% 45%, #d6ffe0 0%, #2bff5f 50%, var(--led-on) 100%);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.75), 0 0 9px 1px var(--led-glow);
+    }
+    .seq-key {
+      position: absolute; top: -7px;
+      width: 8px; height: 8px;
+      transform: translateX(-50%) rotate(45deg);
       background: var(--gold, #ffd54a);
       box-shadow: 0 0 5px rgba(255,213,74,0.85);
-      z-index: 3; pointer-events: none;
+      z-index: 5; pointer-events: none;
     }
-    .frame-step.has-key.key-selected::after {
-      width: 11px; height: 11px; top: -8px;
+    .seq-key.key-selected {
+      width: 12px; height: 12px; top: -9px;
       background: #fff6b0;
       box-shadow: 0 0 0 2px #3a2c00, 0 0 10px rgba(255,213,74,1);
     }
-    .frame-step.has-key { cursor: grab; }
-    #timeline-container.key-dragging,
-    #timeline-container.key-dragging .frame-step { cursor: grabbing !important; }
+    #timeline-container.key-dragging { cursor: grabbing !important; }
 
-    /* Lit LED (playhead) — bright green core with a soft bloom (paused) */
-    .frame-step.active {
-      background: radial-gradient(circle at 50% 45%, #9dffb5 0%, #2bff5f 50%, var(--led-on) 100%);
-      box-shadow: 0 0 7px 1px var(--led-glow);
-      position: relative; z-index: 2;
-    }
-
-    /* While playing, the travelling playhead is a solid bright green (no hot core) */
-    #bottom-panel.playing .frame-step.active {
-      background: var(--led-on);
-      box-shadow: 0 0 6px 1px var(--led-glow);
-    }
-
-    /* --- Pads mode: the LED strip morphs into a row of sequence pads --- */
-    #timeline-container {
-      position: relative;
-      transition: height 0.22s ease, gap 0.22s ease, padding 0.22s ease;
-    }
     #timeline-container.pads-mode {
-      height: 58px; gap: 6px; padding: 6px 7px;
+      display: flex; height: 58px; gap: 6px; padding: 6px 7px;
       background: linear-gradient(180deg, #0b0b0d 0%, #16161a 100%);
+      cursor: default;
     }
+    #timeline-container.pads-mode #seq-track { display: none; }
 
     /* Cycle sweep across the whole strip — hidden; pads already show their own beat. */
     #pads-playhead { display: none !important; }
@@ -343,12 +383,6 @@
       color: var(--gold); font-size: 9px; letter-spacing: 1px;
       border: 1px solid rgba(255,213,74,0.45); border-radius: 3px;
       padding: 0 4px; margin-left: 6px;
-    }
-
-    /* Per-frame edit mode indicators */
-    #bottom-panel.editing .frame-step.active {
-      background: radial-gradient(circle at 50% 45%, #d6ffe0 0%, #2bff5f 50%, var(--led-on) 100%);
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.7), 0 0 9px 1px var(--led-glow);
     }
 
     /* Play / Pause Button — same dark plastic as the other keys, muted green / red icon */
@@ -561,6 +595,16 @@
     .brush-flyout .val-display {
       min-width: 44px; max-width: none; text-align: center;
       font-size: 12px; padding: 2px 8px;
+    }
+    .flyout-tip {
+      color: var(--lcd-text); font-size: 10px; letter-spacing: 1px; font-weight: 700;
+      font-family: var(--font-mono); text-transform: uppercase;
+      white-space: nowrap; text-align: center;
+      padding: 1px 6px; border-radius: 3px;
+      background: var(--lcd-bg);
+      border: 1px solid #05070a;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.35);
+      text-shadow: 0 0 5px rgba(143,240,168,0.65);
     }
 
     /* Controls Grid — animation settings only, under the timeline */
@@ -1016,16 +1060,25 @@
 
     /* Responsive adjustments */
     @media (max-width: 768px) {
-      #bottom-panel { width: 100%; bottom: 0; border-radius: 16px 16px 0 0; border-bottom: none; border-left: none; border-right: none; }
+      #bottom-panel {
+        width: 100%; max-width: 100%;
+        left: 0; right: 0;
+        bottom: 0;
+        border-radius: 16px 16px 0 0;
+        border-bottom: none; border-left: none; border-right: none;
+        padding: 12px max(12px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      }
       #controls-layout { grid-template-columns: 1fr; gap: 16px; }
-      /* iPhone: fill the screen width. width:max-content otherwise stays one
-         long row and overflows even with max-width:100% (Safari). */
+      #panel-header { gap: 8px; min-width: 0; }
+      #seq-track { inset: 4px 4px; }
+      /* Stay inside the panel — negative insets overflow iPhone's right edge. */
       #brush-dock {
-        left: -14px; right: -14px;
-        width: auto; max-width: none; margin: 0;
+        left: 0; right: 0;
+        width: auto; max-width: 100%; margin: 0;
         justify-content: center;
-        row-gap: 8px; column-gap: 8px;
-        padding: 8px 8px;
+        row-gap: 8px; column-gap: 6px;
+        padding: 8px 6px;
+        box-sizing: border-box;
       }
       #brush-dock > .brush-tools,
       #brush-dock > .brush-section {
@@ -1035,6 +1088,7 @@
       #brush-dock .brush-section,
       #brush-dock .brush-tools {
         flex-wrap: wrap; justify-content: center;
+        max-width: 100%;
       }
       #brush-dock .tool-tab { padding: 6px 7px; }
     }
@@ -1332,8 +1386,16 @@
       </button>
       <button id="play-btn" aria-label="Play/Pause"></button>
       <div id="timeline-wrap">
+        <div id="frame-toast" aria-live="polite"></div>
         <canvas id="morph-kern-rail" aria-hidden="true" title="Morph kern: drag a bead — left/right lingers on a pose, up/down sets ease"></canvas>
-        <div id="timeline-container"><div id="pads-playhead"></div></div>
+        <div id="timeline-container">
+          <div id="seq-track">
+            <div id="seq-progress"></div>
+            <div id="seq-grid"></div>
+            <div id="seq-playhead"></div>
+          </div>
+          <div id="pads-playhead"></div>
+        </div>
       </div>
       <button id="pads-btn" aria-pressed="false" aria-label="Pads" title="Pads: store and launch sequences">
         <svg class="icon-pads" viewBox="0 0 16 16" aria-hidden="true">
@@ -1668,6 +1730,7 @@
     
     const bottomPanel = document.getElementById('bottom-panel');
     const timelineContainer = document.getElementById('timeline-container');
+    const seqTrack = document.getElementById('seq-track');
     const minimizeBtn = document.getElementById('minimize-btn');
     const brushBtn = document.getElementById('brush-btn');
     const brushDock = document.getElementById('brush-dock');
@@ -1735,6 +1798,7 @@
         valSpeedInput.step = 0.1;
       }
       updateRangeFill(speedSlider);
+      if (typeof syncSeqGrid === 'function') syncSeqGrid();
     }
 
     tempoToggleBtn.addEventListener('click', () => {
@@ -2025,6 +2089,7 @@
       tempoQuant = tapQuantDenom();
       if (lastTappedBpm > 0) applyTappedBpm(lastTappedBpm);
       else updateTempoUI();
+      if (typeof syncSeqGrid === 'function') syncSeqGrid();
     });
     window.addEventListener('keydown', (e) => {
       if (tapOverlay.classList.contains('hidden')) return;
@@ -2062,6 +2127,14 @@
     brushBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       setBrushDockOpen(!bottomPanel.classList.contains('brush-open'));
+    });
+    document.querySelectorAll('.brush-tool-wrap[data-tip]').forEach(wrap => {
+      const fly = wrap.querySelector('.brush-flyout');
+      if (!fly || fly.querySelector('.flyout-tip')) return;
+      const tag = document.createElement('span');
+      tag.className = 'flyout-tip';
+      tag.textContent = wrap.dataset.tip;
+      fly.appendChild(tag);
     });
     document.querySelectorAll('.brush-tool[data-flyout]').forEach(btn => {
       btn.addEventListener('click', (e) => {
@@ -2868,22 +2941,55 @@
       updatePlayBtn();
     }
 
-    // --- Quantized Timeline Setup ---
-    // The strip is shared with pads mode, so clear only the cells and keep the
-    // persistent playhead element.
+    // Sequencer groove: beat ticks follow the quantize grid; one playhead travels.
+    function timelineFrameCount() {
+      return Math.max(1, parseInt(framesSlider.value, 10) || 1);
+    }
+    function seqTrackRect() {
+      return (seqTrack || timelineContainer).getBoundingClientRect();
+    }
+    function syncSeqGrid() {
+      if (!timelineContainer) return;
+      const beats = tempoQuant || 4;
+      const divs = beats <= 8 ? beats * 4 : beats;
+      timelineContainer.style.setProperty('--seq-beats', String(beats));
+      timelineContainer.style.setProperty('--seq-divs', String(Math.min(32, divs)));
+    }
+    function seqTOfFrame(frame, n) {
+      n = n || timelineFrameCount();
+      return n > 0 ? frame / n : 0;
+    }
+    function updateSeqPlayhead() {
+      if (padsMode || !seqTrack) return;
+      const n = timelineFrameCount();
+      const t = n > 0 ? (((playheadPos % n) + n) % n) / n : 0;
+      seqTrack.style.setProperty('--seq-t', t.toFixed(5));
+      if (seqTrack.parentElement && seqTrack.parentElement.parentElement) {
+        seqTrack.parentElement.parentElement.style.setProperty('--seq-t', t.toFixed(5));
+      }
+    }
+    function morphPoseNearClientX(clientX) {
+      if (!morphMode || !morphPoses.length) return null;
+      const n = timelineFrameCount();
+      const rect = seqTrackRect();
+      let best = null, bestD = 16;
+      for (const p of morphPoses) {
+        const x = rect.left + seqTOfFrame(p.frame, n) * rect.width;
+        const d = Math.abs(clientX - x);
+        if (d < bestD) { bestD = d; best = p; }
+      }
+      return best;
+    }
+
     function clearTimelineCells() {
-      timelineContainer.querySelectorAll('.frame-step, .pad').forEach(el => el.remove());
+      timelineContainer.querySelectorAll('.frame-step, .pad, .seq-key').forEach(el => el.remove());
       frameSteps = [];
       padEls = [];
     }
     function buildTimeline(totalFrames) {
       clearTimelineCells();
-      for (let i = 0; i < totalFrames; i++) {
-        const step = document.createElement('div');
-        step.className = 'frame-step';
-        timelineContainer.appendChild(step);
-        frameSteps.push(step);
-      }
+      syncSeqGrid();
+      updateSeqPlayhead();
     }
     
     buildTimeline(parseInt(framesSlider.value, 10));
@@ -2896,22 +3002,33 @@
     let timelinePtrStartX = 0;
     let timelinePtrMoved = false;
     function frameFromClientX(clientX) {
-      const total = frameSteps.length;
+      const total = timelineFrameCount();
       if (total <= 1) return 0;
-      const rect = timelineContainer.getBoundingClientRect();
-      const padL = 5, padR = 5; // matches #timeline-container horizontal padding
-      const usable = Math.max(1, rect.width - padL - padR);
-      let t = (clientX - rect.left - padL) / usable;
-      t = Math.max(0, Math.min(1, t));
-      return Math.round(t * (total - 1));
+      const rect = seqTrackRect();
+      let t = (clientX - rect.left) / Math.max(1, rect.width);
+      t = Math.max(0, Math.min(0.999999, t));
+      return Math.min(total - 1, Math.floor(t * total));
     }
-    function parkPlayhead(idx) {
+    function parkPlayhead(idx, announce) {
       editMode = true;
       isPlaying = false;
       playheadPos = idx;
       currentFrame = idx;
       updateEditModeUI();
       updatePlayBtn();
+      updateSeqPlayhead();
+      if (announce) flashFrameToast(!!timelineScrubbing || !!timelineKeyDrag);
+    }
+    let frameToastTimer = 0;
+    function flashFrameToast(hold) {
+      const el = document.getElementById('frame-toast');
+      if (!el || padsMode) return;
+      el.textContent = (currentFrame + 1) + ' / ' + n;
+      el.classList.add('show');
+      clearTimeout(frameToastTimer);
+      if (!hold) {
+        frameToastTimer = setTimeout(() => { el.classList.remove('show'); }, 1200);
+      }
     }
     function moveMorphKeyTo(pose, toFrame) {
       const max = Math.max(0, parseInt(framesSlider.value, 10) - 1);
@@ -2936,7 +3053,7 @@
       // frame we're scrubbing to, so you can pose across frames to build keyframes.
       const editingActive = (typeof penEditing !== 'undefined') && penEditing && penEditBackup;
       if (editingActive && idx !== currentFrame) stashEditPose();
-      parkPlayhead(idx);
+      parkPlayhead(idx, true);
       if (editingActive) { loadEditPose(idx); drawPenOverlay(); updateKeyframeMarkers(); }
       if (morphMode && typeof updatePenActions === 'function') updatePenActions();
     }
@@ -2946,16 +3063,16 @@
       timelinePtrStartX = e.clientX;
       timelinePtrMoved = false;
       try { timelineContainer.setPointerCapture(e.pointerId); } catch (_) {}
-      const morphPose = morphMode ? poseAt(idx) : null;
+      const morphPose = morphMode ? (morphPoseNearClientX(e.clientX) || poseAt(idx)) : null;
       const penKey = (typeof penEditing !== 'undefined' && penEditing && penEditBackup && idx > 0)
         ? penEditKeys.find(k => k.frame === idx) : null;
       if (morphPose) {
-        timelineKeyDrag = { kind: 'morph', pose: morphPose, from: idx, started: false };
-        parkPlayhead(idx);
+        timelineKeyDrag = { kind: 'morph', pose: morphPose, from: morphPose.frame, started: false };
+        parkPlayhead(morphPose.frame, true);
         if (typeof updatePenActions === 'function') updatePenActions();
       } else if (penKey) {
         timelineKeyDrag = { kind: 'pen', key: penKey, from: idx, started: false };
-        parkPlayhead(idx);
+        parkPlayhead(idx, true);
       } else {
         timelineScrubbing = true;
         scrubTimelineTo(e.clientX);
@@ -2976,14 +3093,14 @@
         if (timelineKeyDrag.kind === 'morph') {
           if (moveMorphKeyTo(timelineKeyDrag.pose, idx)) {
             morphKeySelected = timelineKeyDrag.pose.frame;
-            parkPlayhead(timelineKeyDrag.pose.frame);
+            parkPlayhead(timelineKeyDrag.pose.frame, true);
             updateKeyframeMarkers();
             if (typeof updatePenActions === 'function') updatePenActions();
             if (typeof scheduleMorphRebake === 'function') scheduleMorphRebake();
           }
         } else if (timelineKeyDrag.kind === 'pen') {
           if (movePenKeyTo(timelineKeyDrag.key, idx)) {
-            parkPlayhead(timelineKeyDrag.key.frame);
+            parkPlayhead(timelineKeyDrag.key.frame, true);
             loadEditPose(timelineKeyDrag.key.frame);
             drawPenOverlay();
             updateKeyframeMarkers();
@@ -3013,13 +3130,14 @@
         if (!drag.started && morphMode && drag.kind === 'morph') {
           const f = drag.pose.frame;
           morphKeySelected = (morphKeySelected === f) ? -1 : f;
-          parkPlayhead(f);
+          parkPlayhead(f, true);
         } else if (drag.started && drag.kind === 'morph') {
           morphKeySelected = drag.pose.frame;
           if (typeof rebakePen === 'function') rebakePen();
         }
         updateKeyframeMarkers();
         if (typeof updatePenActions === 'function') updatePenActions();
+        flashFrameToast(false);
         return;
       }
       if (!timelineScrubbing) return;
@@ -3035,6 +3153,7 @@
         updateKeyframeMarkers();
         updatePenActions();
       }
+      flashFrameToast(false);
     }
     timelineContainer.addEventListener('pointerup', endTimelineScrub);
     timelineContainer.addEventListener('pointercancel', endTimelineScrub);
@@ -3958,6 +4077,7 @@
     // Diamond markers on the timeline for the path being edited and for every
     // morph pose, so the loop's keyframe structure is always visible.
     function updateKeyframeMarkers() {
+      const n = timelineFrameCount();
       const keyFrames = new Set();
       if (penEditing && penEditBackup) {
         keyFrames.add(0);
@@ -3965,9 +4085,15 @@
         keyFrames.add(penEditFrame);
       }
       for (const p of morphPoses) keyFrames.add(p.frame);
-      for (let i = 0; i < frameSteps.length; i++) {
-        frameSteps[i].classList.toggle('has-key', keyFrames.has(i));
-        frameSteps[i].classList.toggle('key-selected', morphMode && i === morphKeySelected);
+      if (seqTrack) {
+        seqTrack.querySelectorAll('.seq-key').forEach(el => el.remove());
+        for (const f of keyFrames) {
+          if (f < 0 || f >= n) continue;
+          const el = document.createElement('div');
+          el.className = 'seq-key' + (morphMode && f === morphKeySelected ? ' key-selected' : '');
+          el.style.left = (seqTOfFrame(f, n) * 100) + '%';
+          seqTrack.appendChild(el);
+        }
       }
       if (typeof drawMorphKernRail === 'function') drawMorphKernRail();
     }
@@ -4015,10 +4141,9 @@
       if (poses.length < 2) return;
 
       function cxOf(frame) {
-        const el = frameSteps[frame];
-        if (!el) return 0;
-        const r = el.getBoundingClientRect();
-        return r.left + r.width * 0.5 - wr.left;
+        const n = activeFrames;
+        const tr = seqTrackRect();
+        return tr.left - wr.left + seqTOfFrame(frame, n) * tr.width;
       }
       const padL = 8, padR = w - 8, yBase = h - 6;
 
@@ -4832,6 +4957,8 @@
       currentFrame = ((currentFrame + dir * step) % activeFrames + activeFrames) % activeFrames;
       playheadPos = currentFrame;
       wheelAccum = 0;
+      if (typeof updateSeqPlayhead === 'function') updateSeqPlayhead();
+      if (typeof flashFrameToast === 'function') flashFrameToast(false);
       if (morphMode) updatePenActions();
     }, { passive: false });
 
@@ -4982,14 +5109,7 @@
       updatePlayBtn();
 
       if (padsMode) updatePadPlayhead(activeFrames);
-
-      for (let i = 0; i < frameSteps.length; i++) {
-        if (i === currentFrame) {
-          frameSteps[i].classList.add('active');
-        } else {
-          frameSteps[i].classList.remove('active');
-        }
-      }
+      else updateSeqPlayhead();
 
       updatePlayBtn();
 
