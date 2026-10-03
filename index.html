@@ -596,6 +596,16 @@
       min-width: 44px; max-width: none; text-align: center;
       font-size: 12px; padding: 2px 8px;
     }
+    /* Two vertical faders (copies + gap) for the offset trail */
+    .offset-sliders { display: flex; gap: 2px; align-items: flex-end; }
+    .offset-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .offset-axis {
+      color: var(--ink-muted); font-family: var(--font-mono);
+      font-size: 9px; letter-spacing: 0.6px; font-weight: 700;
+      text-transform: uppercase;
+    }
+    /* Last tool in the dock — grow the flyout left so it stays on screen */
+    #offset-flyout { left: auto; right: 0; transform: none; }
     .flyout-tip {
       color: var(--lcd-text); font-size: 10px; letter-spacing: 1px; font-weight: 700;
       font-family: var(--font-mono); text-transform: uppercase;
@@ -993,7 +1003,49 @@
     }
     .curve-panel-actions button:hover { background: var(--plastic-btn-hover); }
     .curve-panel-actions button:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(0,0,0,0.3); }
-    #curve-panel-body { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+    #curve-panel-body {
+      display: flex; flex-direction: column; gap: 8px; padding: 12px;
+      max-height: min(78vh, 640px); overflow-y: auto;
+    }
+    #curve-stack { display: flex; flex-direction: column; gap: 4px; }
+    .curve-stack-empty {
+      color: var(--ink-muted); font-family: var(--font-mono);
+      font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase;
+      text-align: center; padding: 2px 0 4px;
+    }
+    .curve-layer {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 4px 5px 8px; border-radius: 5px;
+      background: rgba(0,0,0,0.28); border: 1px solid transparent;
+      cursor: pointer; font-family: var(--font-mono);
+      font-size: 10px; font-weight: 700; letter-spacing: 0.4px;
+      text-transform: uppercase; color: var(--ink-muted);
+    }
+    .curve-layer.active {
+      color: var(--lcd-text);
+      border-color: rgba(0, 255, 65, 0.7);
+      box-shadow: inset 0 0 0 1px rgba(0, 255, 65, 0.25);
+    }
+    .curve-layer-x {
+      margin-left: auto; width: 18px; height: 18px; border-radius: 4px;
+      border: 1px solid #3a3a42; background: transparent; color: var(--ink-muted);
+      font-size: 13px; line-height: 1; cursor: pointer; padding: 0;
+      font-family: var(--font-mono);
+    }
+    .curve-layer-x:hover { color: #fff; border-color: #888; }
+    .curve-stack-actions { display: flex; gap: 6px; }
+    .curve-stack-actions button {
+      flex: 1; font-family: var(--font-mono); font-weight: 700; font-size: 10px;
+      letter-spacing: 0.6px; text-transform: uppercase; padding: 6px 8px;
+      border-radius: 5px; cursor: pointer; border: 2px solid; color: var(--ink);
+      background: var(--plastic-btn); border-color: var(--bevel-raised);
+    }
+    .curve-stack-actions button:disabled { opacity: 0.35; cursor: default; }
+    #curve-add {
+      color: #04140a; background: var(--led-on);
+      border-color: #6cffa0 #0a5a24 #0a5a24 #6cffa0;
+    }
+    #curve-add:hover:not(:disabled) { filter: brightness(1.08); }
 
     .curve-field { display: flex; align-items: center; gap: 8px; }
     .curve-field-label {
@@ -1231,6 +1283,11 @@
       </div>
     </div>
     <div id="curve-panel-body">
+      <div id="curve-stack"></div>
+      <div class="curve-stack-actions">
+        <button type="button" id="curve-add">+ Add</button>
+        <button type="button" id="curve-clear">Remove all</button>
+      </div>
       <label class="curve-field">
         <span class="curve-field-label">Parameter</span>
         <select id="curve-param">
@@ -1239,6 +1296,7 @@
           <option value="blur">Blur</option>
           <option value="noise">Noise</option>
           <option value="softness">Softness</option>
+          <option value="offset">Offset Gap</option>
           <option value="trail">Trail Length</option>
           <option value="morph">Morph Timing</option>
         </select>
@@ -1374,6 +1432,32 @@
               <span class="val-display" id="val-kaleido">OFF</span>
               <div class="vert-slider-wrap">
                 <input type="range" id="kaleido-slider" min="1" max="12" step="1" value="1">
+              </div>
+            </div>
+          </div>
+          <div class="brush-tool-wrap" data-tip="Offset">
+            <button type="button" class="brush-tool" id="offset-btn" data-flyout="offset-flyout" aria-label="Offset trail" aria-expanded="false">
+              <svg viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M1.4 4.1c2.6 0 3.2 2.5 5.4 2.5s2.6-2.5 5.2-2.5 2.2 1.1 2.6.6"/>
+                <path d="M1.4 8c2.6 0 3.2 2.5 5.4 2.5s2.6-2.5 5.2-2.5 2.2 1.1 2.6.6"/>
+                <path d="M1.4 11.9c2.6 0 3.2 2.5 5.4 2.5s2.6-2.5 5.2-2.5 2.2 1.1 2.6.6"/>
+              </svg>
+            </button>
+            <div class="brush-flyout" id="offset-flyout">
+              <span class="val-display" id="val-offset">OFF</span>
+              <div class="offset-sliders">
+                <div class="offset-col">
+                  <div class="vert-slider-wrap">
+                    <input type="range" id="offset-count" min="0" max="6" step="1" value="0">
+                  </div>
+                  <span class="offset-axis">Copies</span>
+                </div>
+                <div class="offset-col">
+                  <div class="vert-slider-wrap">
+                    <input type="range" id="offset-gap" min="2" max="80" step="1" value="16">
+                  </div>
+                  <span class="offset-axis">Gap</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1718,6 +1802,9 @@
     const blurSlider = document.getElementById('blur-slider');
     const kaleidoSlider = document.getElementById('kaleido-slider');
     const kaleidoBtn = document.getElementById('kaleido-btn');
+    const offsetCountSlider = document.getElementById('offset-count');
+    const offsetGapSlider = document.getElementById('offset-gap');
+    const offsetBtn = document.getElementById('offset-btn');
     const softSlider = document.getElementById('soft-slider');
     
     const valFrames = document.getElementById('val-frames');
@@ -1727,6 +1814,7 @@
     const valOpacity = document.getElementById('val-opacity');
     const valBlur = document.getElementById('val-blur');
     const valKaleido = document.getElementById('val-kaleido');
+    const valOffset = document.getElementById('val-offset');
     
     const bottomPanel = document.getElementById('bottom-panel');
     const timelineContainer = document.getElementById('timeline-container');
@@ -2113,6 +2201,9 @@
         btn.classList.remove('active');
         btn.setAttribute('aria-expanded', 'false');
       });
+      // Effects that are actually on stay lit after their flyout closes.
+      if (typeof syncKaleidoUI === 'function') syncKaleidoUI();
+      if (typeof syncOffsetUI === 'function') syncOffsetUI();
     }
     function setBrushDockOpen(open) {
       bottomPanel.classList.toggle('brush-open', open);
@@ -2205,6 +2296,10 @@
 
     let curveEnabled = false;
     let curveParam = 'size';
+    // Set once the pen tool exists, so shaping the curve can refresh its preview.
+    let afterCurveChange = null;
+
+    const CURVE_PARAM_IDS = ['size', 'opacity', 'blur', 'noise', 'softness', 'offset', 'trail', 'morph'];
 
     // Common animation "waves" as editable keyframe sets (x = loop position 0..1, y = value 0..1)
     const CURVE_PRESETS = {
@@ -2224,20 +2319,32 @@
       return (CURVE_PRESETS[name] || CURVE_PRESETS.rampUp).map(p => ({ x: p.x, y: p.y }));
     }
 
-    // Editable keyframes, kept sorted by x with locked endpoints at x=0 and x=1.
-    let curvePoints = clonePreset('sine');
-    curvePresetSelect.value = 'sine';
+    // Each layer is one effect with its own curve. They stack: size and offset
+    // gap (and the rest) can all run on the same stroke.
+    let curveLayerSeq = 1;
+    function makeCurveLayer(param, presetName) {
+      const preset = presetName || 'sine';
+      return { id: curveLayerSeq++, param, preset, points: clonePreset(preset), lut: new Array(101).fill(0.5) };
+    }
+    let curveLayers = [makeCurveLayer('size', 'sine')];
+    let activeLayerId = curveLayers[0].id;
+    function activeLayer() { return curveLayers.find(l => l.id === activeLayerId) || null; }
+    function curveHas(param) { return curveLayers.some(l => l.param === param); }
+    function layerPoints() {
+      const l = activeLayer();
+      return l ? l.points : [];
+    }
 
     const CURVE_PAD = 12;
     const HIT_RADIUS = 16;   // px hit test for grabbing / removing a point
     const MIN_X_GAP = 0.02;  // minimum spacing between neighbouring keyframes
-    let curveLUT = new Array(101).fill(0.5);
+    let curveLUT = curveLayers[0].lut;
 
     function clamp01(v) { return Math.max(0, Math.min(1, v)); }
 
     // Catmull-Rom interpolation through the keyframes (linear when only two points).
-    function sampleCurveAt(x) {
-      const pts = curvePoints;
+    function sampleCurveAt(x, points) {
+      const pts = points || layerPoints();
       const n = pts.length;
       x = clamp01(x);
       if (n === 0) return 0.5;
@@ -2259,11 +2366,17 @@
       return clamp01(y);
     }
 
-    function buildCurveLUT() {
-      const N = curveLUT.length;
+    function buildLayerLUT(layer) {
+      const N = 101;
       const arr = new Array(N);
-      for (let i = 0; i < N; i++) arr[i] = sampleCurveAt(i / (N - 1));
-      curveLUT = arr;
+      for (let i = 0; i < N; i++) arr[i] = sampleCurveAt(i / (N - 1), layer.points);
+      layer.lut = arr;
+    }
+    function buildCurveLUT() {
+      const l = activeLayer();
+      if (l) buildLayerLUT(l);
+      curveLUT = l ? l.lut : new Array(101).fill(0.5);
+      curveParam = l ? l.param : 'size';
     }
 
     function sampleLUT(lut, x) {
@@ -2275,7 +2388,14 @@
     // A frozen copy of the current curve so a baked path keeps its own scaling
     // even if the global curve is later changed.
     function currentCurveSnapshot() {
-      return { enabled: curveEnabled, param: curveParam, lut: curveLUT.slice() };
+      const first = curveLayers[0];
+      return {
+        enabled: curveEnabled,
+        layers: curveLayers.map(l => ({ param: l.param, lut: l.lut.slice() })),
+        // First layer, so older readers still see a single curve.
+        param: first ? first.param : null,
+        lut: first ? first.lut.slice() : null
+      };
     }
 
     function curveToScreen(p) {
@@ -2290,6 +2410,15 @@
       const W = curveCanvas.width, H = curveCanvas.height;
       const ctx = curveCtx;
       ctx.clearRect(0, 0, W, H);
+      const points = layerPoints();
+      if (!points.length) {
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '12px Courier New, monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Add an effect', W / 2, H / 2);
+        return;
+      }
 
       // grid
       ctx.strokeStyle = 'rgba(255,255,255,0.08)';
@@ -2325,10 +2454,10 @@
       }
 
       // keyframe points (endpoints are drawn hollow to signal they're x-locked)
-      for (let i = 0; i < curvePoints.length; i++) {
-        const s = curveToScreen(curvePoints[i]);
+      for (let i = 0; i < points.length; i++) {
+        const s = curveToScreen(points[i]);
         const active = (i === curveDragIndex);
-        const endpoint = (i === 0 || i === curvePoints.length - 1);
+        const endpoint = (i === 0 || i === points.length - 1);
         ctx.fillStyle = 'rgba(255,255,255,0.12)';
         ctx.beginPath(); ctx.arc(s.x, s.y, active ? 15 : 11, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = endpoint ? '#101012' : accent;
@@ -2341,12 +2470,20 @@
     // --- Curve editor interaction ---
     let curveDragIndex = -1;
 
-    function sortCurvePoints() { curvePoints.sort((a, b) => a.x - b.x); }
-    function markCustom() { curvePresetSelect.value = 'custom'; }
+    function sortCurvePoints() {
+      const l = activeLayer();
+      if (l) l.points.sort((a, b) => a.x - b.x);
+    }
+    function markCustom() {
+      const l = activeLayer();
+      if (l) l.preset = 'custom';
+      curvePresetSelect.value = 'custom';
+    }
     function refreshCurve() {
       buildCurveLUT();
       drawCurveEditor();
       scheduleMorphRebake(); // the curve is the morph's timing when that param is picked
+      if (afterCurveChange) afterCurveChange();
     }
 
     function curvePointerPos(e) {
@@ -2364,9 +2501,10 @@
     }
 
     function nearestPoint(p) {
+      const points = layerPoints();
       let best = -1, bestDist = Infinity;
-      for (let i = 0; i < curvePoints.length; i++) {
-        const s = curveToScreen(curvePoints[i]);
+      for (let i = 0; i < points.length; i++) {
+        const s = curveToScreen(points[i]);
         const d = Math.hypot(s.x - p.sx, s.y - p.sy);
         if (d < bestDist) { bestDist = d; best = i; }
       }
@@ -2375,13 +2513,14 @@
 
     function applyDrag(p) {
       const i = curveDragIndex;
-      if (i < 0) return;
-      const pt = curvePoints[i];
+      const points = layerPoints();
+      if (i < 0 || !points[i]) return;
+      const pt = points[i];
       pt.y = p.ny;
       // Endpoints keep their x locked; inner points move in x, clamped between neighbours.
-      if (i > 0 && i < curvePoints.length - 1) {
-        const lo = curvePoints[i-1].x + MIN_X_GAP;
-        const hi = curvePoints[i+1].x - MIN_X_GAP;
+      if (i > 0 && i < points.length - 1) {
+        const lo = points[i-1].x + MIN_X_GAP;
+        const hi = points[i+1].x - MIN_X_GAP;
         pt.x = Math.max(lo, Math.min(hi, p.nx));
       }
       refreshCurve();
@@ -2389,6 +2528,7 @@
 
     curveCanvas.addEventListener('pointerdown', (e) => {
       e.stopPropagation();
+      if (!activeLayer()) return;
       if (e.button === 2) return; // right-click is handled by contextmenu (remove)
       const p = curvePointerPos(e);
       const hit = nearestPoint(p);
@@ -2417,10 +2557,12 @@
     // Double-click empty space to add a keyframe.
     curveCanvas.addEventListener('dblclick', (e) => {
       e.preventDefault();
+      const l = activeLayer();
+      if (!l) return;
       const p = curvePointerPos(e);
       const hit = nearestPoint(p);
       if (hit.index >= 0 && hit.dist <= HIT_RADIUS) return; // don't stack on an existing point
-      curvePoints.push({ x: clamp01(p.nx), y: clamp01(p.ny) });
+      l.points.push({ x: clamp01(p.nx), y: clamp01(p.ny) });
       sortCurvePoints();
       markCustom();
       refreshCurve();
@@ -2429,10 +2571,12 @@
     // Right-click a point to remove it (endpoints can't be removed).
     curveCanvas.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      const l = activeLayer();
+      if (!l) return;
       const p = curvePointerPos(e);
       const hit = nearestPoint(p);
-      if (hit.index > 0 && hit.index < curvePoints.length - 1 && hit.dist <= HIT_RADIUS) {
-        curvePoints.splice(hit.index, 1);
+      if (hit.index > 0 && hit.index < l.points.length - 1 && hit.dist <= HIT_RADIUS) {
+        l.points.splice(hit.index, 1);
         markCustom();
         refreshCurve();
       }
@@ -2440,7 +2584,10 @@
 
     // Wave preset selector loads a fresh set of keyframes.
     function applyPreset(name) {
-      curvePoints = clonePreset(name);
+      const l = activeLayer();
+      if (!l) return;
+      l.preset = name;
+      l.points = clonePreset(name);
       sortCurvePoints();
       refreshCurve();
     }
@@ -2453,6 +2600,7 @@
       curveEnabled = on;
       curveToggleBtn.classList.toggle('active', on);
       curveToggleBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (afterCurveChange) afterCurveChange();
     }
     function openCurvePanel() {
       curvePanel.classList.remove('hidden');
@@ -2473,17 +2621,136 @@
       } else {
         setCurveEnabled(false);
         closeCurvePanel();
-        if (curveParam === 'morph' && morphPoses.length > 1) rebakePen();
+        if (curveHas('morph') && morphPoses.length > 1) rebakePen();
         else scheduleMorphRebake();
       }
     });
     curveCloseBtn.addEventListener('click', closeCurvePanel);
     curveParamSelect.addEventListener('change', () => {
-      const wasMorph = curveParam === 'morph';
-      curveParam = curveParamSelect.value;
-      // Leaving Morph Timing has to reset the tween back to linear.
+      const l = activeLayer();
+      if (!l) { curveParamSelect.value = curveParam; return; }
+      const next = curveParamSelect.value;
+      if (curveLayers.some(o => o.id !== l.id && o.param === next)) {
+        curveParamSelect.value = l.param;
+        return;
+      }
+      const wasMorph = l.param === 'morph' || next === 'morph';
+      l.param = next;
+      curveParam = next;
+      renderCurveStack();
       if (wasMorph && morphPoses.length > 1) rebakePen();
       else scheduleMorphRebake();
+      if (afterCurveChange) afterCurveChange();
+    });
+
+    function paramLabel(id) {
+      const opt = curveParamSelect.querySelector('option[value="' + id + '"]');
+      return opt ? opt.textContent : id;
+    }
+    function renderCurveStack() {
+      const host = document.getElementById('curve-stack');
+      if (!host) return;
+      host.innerHTML = '';
+      if (!curveLayers.length) {
+        const empty = document.createElement('div');
+        empty.className = 'curve-stack-empty';
+        empty.textContent = 'No effects';
+        host.appendChild(empty);
+      }
+      for (const layer of curveLayers) {
+        const row = document.createElement('div');
+        row.className = 'curve-layer' + (layer.id === activeLayerId ? ' active' : '');
+        const name = document.createElement('span');
+        name.textContent = paramLabel(layer.param);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'curve-layer-x';
+        remove.textContent = '\u00d7';
+        remove.title = 'Remove ' + paramLabel(layer.param);
+        remove.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeCurveLayer(layer.id);
+        });
+        row.appendChild(name);
+        row.appendChild(remove);
+        row.addEventListener('click', () => selectCurveLayer(layer.id));
+        host.appendChild(row);
+      }
+      const used = new Set(curveLayers.map(l => l.param));
+      const active = activeLayer();
+      for (const opt of curveParamSelect.options) {
+        opt.disabled = used.has(opt.value) && (!active || opt.value !== active.param);
+      }
+      curveParamSelect.disabled = !active;
+      curvePresetSelect.disabled = !active;
+      curveCanvas.style.opacity = active ? '1' : '0.4';
+      const addBtn = document.getElementById('curve-add');
+      const clearBtn = document.getElementById('curve-clear');
+      if (addBtn) addBtn.disabled = used.size >= CURVE_PARAM_IDS.length;
+      if (clearBtn) clearBtn.disabled = curveLayers.length === 0;
+      if (active) {
+        curveParamSelect.value = active.param;
+        curvePresetSelect.value = active.preset || 'custom';
+      }
+    }
+    function selectCurveLayer(id) {
+      if (!curveLayers.some(l => l.id === id)) return;
+      activeLayerId = id;
+      const l = activeLayer();
+      curveParam = l.param;
+      curveLUT = l.lut;
+      renderCurveStack();
+      drawCurveEditor();
+    }
+    function addCurveLayer() {
+      const used = new Set(curveLayers.map(l => l.param));
+      const param = CURVE_PARAM_IDS.find(id => !used.has(id));
+      if (!param) return;
+      const layer = makeCurveLayer(param, 'sine');
+      buildLayerLUT(layer);
+      curveLayers.push(layer);
+      activeLayerId = layer.id;
+      curveParam = layer.param;
+      curveLUT = layer.lut;
+      renderCurveStack();
+      refreshCurve();
+    }
+    function removeCurveLayer(id) {
+      const layer = curveLayers.find(l => l.id === id);
+      if (!layer) return;
+      const wasMorph = layer.param === 'morph';
+      curveLayers = curveLayers.filter(l => l.id !== id);
+      if (activeLayerId === id) {
+        activeLayerId = curveLayers.length ? curveLayers[curveLayers.length - 1].id : null;
+      }
+      const l = activeLayer();
+      curveParam = l ? l.param : 'size';
+      curveLUT = l ? l.lut : new Array(101).fill(0.5);
+      renderCurveStack();
+      if (wasMorph && morphPoses.length > 1) rebakePen();
+      else scheduleMorphRebake();
+      refreshCurve();
+      if (afterCurveChange) afterCurveChange();
+    }
+    function clearCurveLayers() {
+      const wasMorph = curveHas('morph');
+      curveLayers = [];
+      activeLayerId = null;
+      curveParam = 'size';
+      curveLUT = new Array(101).fill(0.5);
+      renderCurveStack();
+      if (wasMorph && morphPoses.length > 1) rebakePen();
+      else scheduleMorphRebake();
+      refreshCurve();
+      if (afterCurveChange) afterCurveChange();
+    }
+    document.getElementById('curve-add').addEventListener('click', (e) => {
+      e.stopPropagation();
+      addCurveLayer();
+    });
+    document.getElementById('curve-clear').addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearCurveLayers();
     });
 
     // Make the floating panel draggable by its header.
@@ -2520,6 +2787,7 @@
     })();
 
     buildCurveLUT();
+    renderCurveStack();
 
     // --- Sync Toggle Logic ---
     syncBtn.addEventListener('click', () => {
@@ -2625,6 +2893,8 @@
         size: getBrushSize(),
         softness: parseFloat(softSlider.value),
         kaleido: getKaleidoN(),
+        offsetCopies: getOffsetCopies(),
+        offsetGap: getOffsetGap(),
         color: colorPicker.value,
         background: bg,
         frameData: packFrameList(frameData, frames),
@@ -2636,7 +2906,9 @@
             points: s.points.map(pt => [roundTo(pt.x, 1), roundTo(pt.y, 1)]),
             rgb: s.rgb.map(c => roundTo(c, 4)),
             size: roundTo(s.size, 2),
-            soft: roundTo(s.soft, 3)
+            soft: roundTo(s.soft, 3),
+            offsetCopies: s.offsetCopies | 0,
+            offsetGap: roundTo(s.offsetGap || 0, 2)
           }))
         }))
       };
@@ -2817,6 +3089,8 @@
       setBrushSize(p.size);
       setSliderValue(softSlider, p.softness);
       if (p.kaleido != null) setSliderValue(kaleidoSlider, p.kaleido);
+      if (p.offsetCopies != null) setSliderValue(offsetCountSlider, p.offsetCopies);
+      if (p.offsetGap != null) setSliderValue(offsetGapSlider, p.offsetGap);
       const safeColor = sanitizeColor(p.color);
       if (safeColor) {
         colorPicker.value = safeColor;
@@ -2899,6 +3173,8 @@
               rgb: Array.isArray(st.rgb) ? st.rgb.map(clampCh) : [1, 1, 1],
               size: Math.max(0, num(st.size, 8)) * S,
               soft: Math.max(0, num(st.soft, 0)),
+              offsetCopies: Math.max(0, Math.min(6, st.offsetCopies | 0)),
+              offsetGap: Math.max(0, num(st.offsetGap, 0)) * S,
               curve: null,
               centroid: null
             });
@@ -3529,6 +3805,14 @@
       syncKaleidoUI();
       if (typeof drawPenOverlay === 'function' && penMode) drawPenOverlay();
     });
+    offsetCountSlider.addEventListener('input', () => {
+      syncOffsetUI();
+      if (typeof drawPenOverlay === 'function' && penMode) drawPenOverlay();
+    });
+    offsetGapSlider.addEventListener('input', () => {
+      syncOffsetUI();
+      if (typeof drawPenOverlay === 'function' && penMode) drawPenOverlay();
+    });
 
     function getKaleidoN() {
       return Math.max(1, Math.min(12, parseInt(kaleidoSlider.value, 10) || 1));
@@ -3573,6 +3857,324 @@
       if (kaleidoBtn) kaleidoBtn.classList.toggle('active', n >= 2);
     }
 
+    // Offset trail: N parallel copies of the stroke, each stepped further off the
+    // centerline along the curve normal. Same idea as Transform + Feedback —
+    // every copy is the line again, translated outward, fading as it goes.
+    function getOffsetCopies() {
+      return Math.max(0, Math.min(6, parseInt(offsetCountSlider.value, 10) || 0));
+    }
+    function getOffsetGap() {
+      return Math.max(2, Math.min(80, parseInt(offsetGapSlider.value, 10) || 2));
+    }
+    function pathOffset(path) {
+      const copies = path && path.offsetCopies != null ? (path.offsetCopies | 0) : 0;
+      const gap = path && path.offsetGap != null ? +path.offsetGap : 0;
+      return {
+        copies: Math.max(0, Math.min(6, copies)),
+        gap: Math.max(0, Math.min(80, gap))
+      };
+    }
+    function syncOffsetUI() {
+      const c = getOffsetCopies();
+      const g = getOffsetGap();
+      if (valOffset) valOffset.innerText = c < 1 ? 'OFF' : (c + '\u00d7' + g);
+      const fly = document.getElementById('offset-flyout');
+      const open = !!(fly && fly.classList.contains('open'));
+      if (offsetBtn) offsetBtn.classList.toggle('active', c >= 1 || open);
+    }
+    // Outer copies fade so the stack reads as a trail, not a solid ribbon.
+    function offsetFade(i) {
+      return Math.max(0.22, 1 - i * 0.13);
+    }
+    // Unit normals along a polyline (left of travel). Closed paths that repeat
+    // their first point are treated as a loop so the seam doesn't kink.
+    function curveNormals(pts, closed) {
+      const n = pts.length;
+      let end = n;
+      const wrap = !!closed;
+      if (wrap && n > 2 && Math.hypot(pts[0].x - pts[n - 1].x, pts[0].y - pts[n - 1].y) < 0.75) {
+        end = n - 1;
+      }
+      const raw = new Array(end);
+      for (let i = 0; i < end; i++) {
+        const i0 = wrap ? (i - 1 + end) % end : Math.max(0, i - 1);
+        const i1 = wrap ? (i + 1) % end : Math.min(end - 1, i + 1);
+        const dx = pts[i1].x - pts[i0].x;
+        const dy = pts[i1].y - pts[i0].y;
+        const len = Math.hypot(dx, dy);
+        raw[i] = len < 1e-5 ? null : { x: -dy / len, y: dx / len };
+      }
+      let seed = { x: 0, y: -1 };
+      for (let i = 0; i < end; i++) if (raw[i]) { seed = raw[i]; break; }
+      for (let i = 0; i < end; i++) {
+        if (!raw[i]) raw[i] = seed;
+        else seed = raw[i];
+      }
+      const out = new Array(n);
+      for (let i = 0; i < end; i++) {
+        const i0 = wrap ? (i - 1 + end) % end : Math.max(0, i - 1);
+        const i1 = wrap ? (i + 1) % end : Math.min(end - 1, i + 1);
+        let x = raw[i0].x + raw[i].x * 2 + raw[i1].x;
+        let y = raw[i0].y + raw[i].y * 2 + raw[i1].y;
+        const len = Math.hypot(x, y) || 1;
+        out[i] = { x: x / len, y: y / len };
+      }
+      if (end < n) out[n - 1] = out[0];
+      return out;
+    }
+    function offsetShellFade(i, c) {
+      let fade = offsetFade(i);
+      if (i > c) fade *= Math.max(0, c - (i - 1));
+      return fade;
+    }
+    // How many dabs a span needs. `ramp` is a size change in pixels: a long
+    // offset arc otherwise keeps one size for the whole swing, which reads as a step.
+    function spanCount(jump, maxStep, ramp) {
+      const denom = Math.max(0.75, maxStep);
+      const spatial = Math.ceil(jump / denom);
+      const blend = ramp > 0.75 ? Math.ceil(ramp / denom) : 1;
+      return Math.min(800, Math.max(spatial, blend, 1));
+    }
+    function fillOffsetSpan(x0, y0, x1, y1, maxStep, fade, emit, ramp) {
+      const n = spanCount(Math.hypot(x1 - x0, y1 - y0), maxStep, ramp || 0);
+      if (n <= 1) return;
+      for (let s = 1; s < n; s++) {
+        const t = s / n;
+        emit(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, fade, t);
+      }
+    }
+    // Round join for one side. Intermediates only; the caller stamps the endpoint.
+    // `t` runs from the previous sample to this one so size can ease along the arc.
+    function arcOffsetSide(x0, y0, nx0, ny0, d0, x1, y1, nx1, ny1, d1, side, maxStep, fade, emit, ramp) {
+      const ang = Math.atan2(nx0 * ny1 - ny0 * nx1, nx0 * nx1 + ny0 * ny1);
+      const ax = x0 + side * nx0 * d0, ay = y0 + side * ny0 * d0;
+      const bx = x1 + side * nx1 * d1, by = y1 + side * ny1 * d1;
+      const n = spanCount(Math.hypot(bx - ax, by - ay), maxStep, ramp || 0);
+      if (n <= 1) return;
+      for (let s = 1; s < n; s++) {
+        const t = s / n;
+        const a = ang * t;
+        const cs = Math.cos(a), sn = Math.sin(a);
+        const nx = nx0 * cs - ny0 * sn;
+        const ny = nx0 * sn + ny0 * cs;
+        const d = d0 + (d1 - d0) * t;
+        emit(
+          x0 + (x1 - x0) * t + side * nx * d,
+          y0 + (y1 - y0) * t + side * ny * d,
+          fade,
+          t
+        );
+      }
+    }
+    // Stamp the centerline and both shells for one sample, and connect them back
+    // to the previous sample. The outside of a corner is a round arc. The inside
+    // would fold through the corner and pile up, so a shell that no longer fits
+    // holds and reconnects with a straight fillet once the turn opens.
+    // `mem` is { p: [], n: [] } (+N and -N), one slot per shell. `drawCur` false
+    // only fills the join (used to close a loop without redrawing the first dab).
+    function advanceOffset(mem, prev, cur, copies, maxStep, emit, drawCur) {
+      if (!mem || !cur) return;
+      const c = Number(copies) || 0;
+      const gap = cur.gap > 0 ? cur.gap : 0;
+      const nx = cur.nx, ny = cur.ny;
+      if (drawCur !== false) emit(cur.x, cur.y, 1);
+      if (!(c > 0.02) || gap <= 0 || nx == null || ny == null) {
+        mem.p.length = 0;
+        mem.n.length = 0;
+        return;
+      }
+      const nShell = Math.ceil(c - 1e-6);
+      const size1 = cur.size > 0 ? cur.size : 0;
+      const size0 = prev && prev.size > 0 ? prev.size : size1;
+      // Dabs have to overlap the brush the curve is drawing now. Spacing from the
+      // slider size leaves a small part of the curve as separate circles, and a
+      // wide gap stretches each of those into a visible step.
+      const fitted = (size0 > 0 && size1 > 0) ? Math.max(1, Math.min(size0, size1) * 0.12) : maxStep;
+      const step = Math.min(maxStep, fitted);
+      const ramp = (size0 > 0 && size1 > 0) ? Math.abs(size1 - size0) : 0;
+      if (drawCur !== false && prev && (ramp > 0.75 || step < maxStep - 0.01)) {
+        fillOffsetSpan(prev.x, prev.y, cur.x, cur.y, step, 1, (x, y, fade, t) => emit(x, y, fade, t, prev), ramp);
+      }
+      let ang = 0, ds = 0;
+      if (prev && prev.nx != null && prev.ny != null) {
+        ang = Math.atan2(prev.nx * ny - prev.ny * nx, prev.nx * nx + prev.ny * ny);
+        ds = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+      }
+      const a = Math.abs(ang);
+      // ang > 0 is a left turn: +N points at the inside of it.
+      const radius = a > 1e-3 ? ds / a : Infinity;
+      const innerSide = ang >= 0 ? 1 : -1;
+      for (let i = nShell; i >= 1; i--) {
+        const fade = offsetShellFade(i, c);
+        if (fade <= 0.02) continue;
+        const d1 = gap * Math.min(i, c);
+        const d0 = (prev && prev.gap > 0) ? prev.gap * Math.min(i, c) : d1;
+        for (let side = 1; side >= -1; side -= 2) {
+          const arr = side > 0 ? mem.p : mem.n;
+          const destX = cur.x + side * nx * d1;
+          const destY = cur.y + side * ny * d1;
+          const slot = arr[i];
+          const folds = side === innerSide && a > 0.22 && Math.max(d0, d1) > radius * 0.85;
+          if (folds) {
+            if (drawCur === false && slot) fillOffsetSpan(slot.x, slot.y, destX, destY, step, fade, (x, y, fd, t) => emit(x, y, fd, t, slot.pose || prev), ramp);
+            else if (slot) slot.held = true;
+            continue;
+          }
+          if (slot && prev && prev.nx != null) {
+            if (slot.held) fillOffsetSpan(slot.x, slot.y, destX, destY, step, fade, (x, y, fd, t) => emit(x, y, fd, t, slot.pose || prev), ramp);
+            else arcOffsetSide(prev.x, prev.y, prev.nx, prev.ny, d0, cur.x, cur.y, nx, ny, d1, side, step, fade, (x, y, fd, t) => emit(x, y, fd, t, prev), ramp);
+          }
+          if (drawCur === false) continue;
+          emit(destX, destY, fade, 1, prev);
+          arr[i] = { x: destX, y: destY, held: false, pose: cur };
+        }
+      }
+    }
+    // gapAt(k), when set, is the gap at polyline point k so a curve can open
+    // and close the copies along the stroke. Otherwise every point uses `gap`.
+    function offsetPolylines(pts, copies, gap, closed, gapAt) {
+      if (!(copies > 0) || !pts || pts.length < 2) return [{ pts, fade: 1 }];
+      const normals = curveNormals(pts, closed);
+      const out = [];
+      let any = false;
+      for (let i = copies; i >= 1; i--) {
+        const fade = offsetFade(i);
+        const a = new Array(pts.length);
+        const b = new Array(pts.length);
+        for (let k = 0; k < pts.length; k++) {
+          const g = gapAt ? gapAt(k) : gap;
+          const d = (g > 0 ? g : 0) * i;
+          if (d > 0.2) any = true;
+          const ox = normals[k].x * d, oy = normals[k].y * d;
+          a[k] = { x: pts[k].x + ox, y: pts[k].y + oy };
+          b[k] = { x: pts[k].x - ox, y: pts[k].y - oy };
+        }
+        out.push({ pts: dropOffsetFolds(pts, a), fade }, { pts: dropOffsetFolds(pts, b), fade });
+      }
+      if (!any) return [{ pts, fade: 1 }];
+      out.push({ pts, fade: 1 });
+      return out;
+    }
+    // Drop shell samples that travel backward through a tight corner. The stroke
+    // then cuts that corner instead of looping into a blob.
+    function dropOffsetFolds(center, shell) {
+      if (!shell || shell.length < 3 || !center || center.length !== shell.length) return shell;
+      const out = [shell[0]];
+      for (let k = 1; k < shell.length; k++) {
+        const tx = center[k].x - center[k - 1].x;
+        const ty = center[k].y - center[k - 1].y;
+        const prev = out[out.length - 1];
+        const sx = shell[k].x - prev.x;
+        const sy = shell[k].y - prev.y;
+        if (sx * tx + sy * ty < 0) continue;
+        out.push(shell[k]);
+      }
+      return out.length >= 2 ? out : shell;
+    }
+    // Recent centerline samples so a freehand stroke's normal follows the curve
+    // instead of twitching with each dab.
+    let offsetTrail = [];
+    let prevOffsetPose = null; // last centerline sample that had a normal
+    let smoothTan = null;      // low-passed stroke direction
+    let offsetMem = { p: [], n: [] };
+    function resetOffsetTrail() {
+      offsetTrail = [];
+      prevOffsetPose = null;
+      smoothTan = null;
+      offsetMem = { p: [], n: [] };
+    }
+    // How far back the direction is measured. Outer copies amplify any wobble
+    // in that direction, so a wide gap or a lot of copies looks further back.
+    function offsetLookback() {
+      const reach = getOffsetCopies() * getOffsetGap() * dpr;
+      const brush = getBrushSize() * dpr;
+      return Math.max(18 * dpr, brush * 0.75, Math.min(reach * 0.55, 150 * dpr));
+    }
+    function noteOffsetPoint(x, y) {
+      const t = offsetTrail;
+      if (t.length) {
+        const p = t[t.length - 1];
+        const dist = Math.hypot(x - p.x, y - p.y);
+        if (dist < 0.8) return;
+        if (dist > 100 * dpr) {
+          offsetTrail = [{ x, y }];
+          prevOffsetPose = null;
+          smoothTan = null;
+          offsetMem = { p: [], n: [] };
+          return;
+        }
+      }
+      offsetTrail.push({ x, y });
+      const keep = offsetLookback() + 64 * dpr;
+      const trail = offsetTrail;
+      while (trail.length > 4) {
+        let span = 0;
+        for (let i = 1; i < trail.length; i++) {
+          span += Math.hypot(trail[i].x - trail[i - 1].x, trail[i].y - trail[i - 1].y);
+        }
+        if (span <= keep) break;
+        trail.shift();
+      }
+    }
+    // Direction from a point a fixed distance behind the head, so the angle
+    // changes as the hand turns and does not pop when a sample falls off.
+    function chordTangent(dist) {
+      const t = offsetTrail;
+      if (t.length < 2) return null;
+      const head = t[t.length - 1];
+      let remain = dist;
+      for (let i = t.length - 1; i > 0; i--) {
+        const dx = t[i].x - t[i - 1].x;
+        const dy = t[i].y - t[i - 1].y;
+        const seg = Math.hypot(dx, dy);
+        if (seg < 1e-6) continue;
+        if (seg >= remain) {
+          const u = remain / seg;
+          const x = t[i].x - dx * u;
+          const y = t[i].y - dy * u;
+          const vx = head.x - x, vy = head.y - y;
+          const len = Math.hypot(vx, vy);
+          if (len < 1.5) return null;
+          return { x: vx / len, y: vy / len, step: Math.hypot(head.x - t[t.length - 2].x, head.y - t[t.length - 2].y) };
+        }
+        remain -= seg;
+      }
+      const vx = head.x - t[0].x, vy = head.y - t[0].y;
+      const len = Math.hypot(vx, vy);
+      if (len < 1.5) return null;
+      return { x: vx / len, y: vy / len, step: len };
+    }
+    function offsetTangent() {
+      const long = chordTangent(offsetLookback());
+      const short = chordTangent(Math.max(8 * dpr, Math.min(offsetLookback() * 0.22, getBrushSize() * dpr * 0.65)));
+      if (!long) return short;
+      if (!short) return long;
+      // A long chord cuts a tight corner and flattens the copies at the tip.
+      // Follow the hand once the recent heading leaves that chord.
+      if (long.x * short.x + long.y * short.y < 0.8) return short;
+      return long;
+    }
+    function offsetNormal() {
+      const raw = offsetTangent();
+      if (!raw) return smoothTan ? { x: -smoothTan.y, y: smoothTan.x } : null;
+      if (!smoothTan) {
+        smoothTan = { x: raw.x, y: raw.y };
+      } else {
+        const align = smoothTan.x * raw.x + smoothTan.y * raw.y;
+        let alpha = 1 - Math.exp(-(raw.step || 1) / (offsetLookback() * 0.45));
+        if (align < 0.8) alpha = Math.max(alpha, 0.65);
+        if (align < 0.45) alpha = 1;
+        let x = smoothTan.x + (raw.x - smoothTan.x) * alpha;
+        let y = smoothTan.y + (raw.y - smoothTan.y) * alpha;
+        const sl = Math.hypot(x, y);
+        if (sl < 0.2) { x = raw.x; y = raw.y; }
+        else { x /= sl; y /= sl; }
+        smoothTan.x = x;
+        smoothTan.y = y;
+      }
+      return { x: -smoothTan.y, y: smoothTan.x };
+    }
+
     // --- Slider fill (shows filled portion of the track) ---
     function updateRangeFill(el) {
       const min = parseFloat(el.min) || 0;
@@ -3598,6 +4200,7 @@
       valBlur.innerText = blurSlider.value;
       valTrail.innerText = trailSlider.value;
       syncKaleidoUI();
+      syncOffsetUI();
       syncSwatch();
     }
 
@@ -3690,7 +4293,7 @@
     // Editing the curve afterwards never changes what's already on the canvas.
     // Modulation sampled at a continuous loop position x (0..1).
     function computeModAtX(x, enabled, param, lut) {
-      let sizeMul = 1.0, noiseAmt = 0.0, blurAdd = 0.0, softAdd = 0.0, alphaMul = 1.0;
+      let sizeMul = 1.0, noiseAmt = 0.0, blurAdd = 0.0, softAdd = 0.0, alphaMul = 1.0, gapMul = 1.0;
       if (enabled && lut) {
         const cv = sampleLUT(lut, x);
         switch (param) {
@@ -3699,18 +4302,46 @@
           case 'blur':     blurAdd = cv * 6.0;         break;
           case 'noise':    noiseAmt = cv * 35.0 * dpr; break;
           case 'softness': softAdd = cv;               break;
+          // Offset gap runs from 0 (copies sit on the line) up to the Gap slider.
+          case 'offset':   gapMul = cv;                break;
         }
       }
-      return { sizeMul, noiseAmt, blurAdd, softAdd, alphaMul };
+      return { sizeMul, noiseAmt, blurAdd, softAdd, alphaMul, gapMul };
     }
 
-    function computeMod(frameIndex, enabled, param, lut) {
-      const af = parseInt(framesSlider.value, 10);
-      return computeModAtX(af > 0 ? (frameIndex / af) : 0, enabled, param, lut);
+    function combineMods(x, layers) {
+      let sizeMul = 1.0, noiseAmt = 0.0, blurAdd = 0.0, softAdd = 0.0, alphaMul = 1.0, gapMul = 1.0;
+      if (layers) {
+        for (const layer of layers) {
+          if (!layer || !layer.lut) continue;
+          const m = computeModAtX(x, true, layer.param, layer.lut);
+          sizeMul *= m.sizeMul;
+          alphaMul *= m.alphaMul;
+          blurAdd += m.blurAdd;
+          noiseAmt += m.noiseAmt;
+          softAdd += m.softAdd;
+          if (layer.param === 'offset') gapMul = m.gapMul;
+        }
+      }
+      return { sizeMul, noiseAmt, blurAdd, softAdd, alphaMul, gapMul };
+    }
+    // Every enabled layer at once. Curve off, or an empty stack, leaves the brush alone.
+    function liveModsAt(x) {
+      if (!curveEnabled || !curveLayers.length) return combineMods(x, null);
+      return combineMods(x, curveLayers);
+    }
+    // A path or pose keeps the stack it was drawn with. Older saves stored one curve.
+    function snapModsAt(x, snap) {
+      if (!snap || !snap.enabled) return combineMods(x, null);
+      const layers = (Array.isArray(snap.layers) && snap.layers.length)
+        ? snap.layers
+        : (snap.param && snap.lut ? [{ param: snap.param, lut: snap.lut }] : []);
+      return combineMods(x, layers);
     }
 
     function brushModForFrame(frameIndex) {
-      return computeMod(frameIndex, curveEnabled, curveParam, curveLUT);
+      const af = parseInt(framesSlider.value, 10);
+      return liveModsAt(af > 0 ? (frameIndex / af) : 0);
     }
 
     // xNorm (0..1), when provided, samples the curve at the dab's continuous loop
@@ -3721,7 +4352,7 @@
       const baseSoft = parseFloat(softSlider.value); // brush softness baked per point
       const m = (xNorm == null)
         ? brushModForFrame(frameIndex)
-        : computeModAtX(xNorm, curveEnabled, curveParam, curveLUT);
+        : liveModsAt(xNorm);
       let px = x, py = y;
       if (m.noiseAmt > 0) {
         px += (Math.random() - 0.5) * m.noiseAmt;
@@ -3730,25 +4361,51 @@
       return [px, py, brushRgb[0], brushRgb[1], brushRgb[2], baseSize * m.sizeMul, m.blurAdd, baseSoft + m.softAdd, m.alphaMul];
     }
 
-    function writeFreeDab(frameIndex, x, y, xNorm) {
+    function writeFreeDab(frameIndex, x, y, xNorm, fade) {
       const p = makeBakedPoint(x, y, frameIndex, xNorm);
+      if (fade != null && fade < 0.999) {
+        p[8] *= fade;
+        p[6] += (1 - fade) * 1.15;
+        p[7] = Math.min(1.2, p[7] + (1 - fade) * 0.45);
+      }
       for (let i = 0; i < p.length; i++) { frameData[frameIndex].push(p[i]); freeData[frameIndex].push(p[i]); }
       frameNeedsUpdate[frameIndex] = true;
     }
 
     // Free-hand point: written to BOTH the live buffer and the free-draw store
-    // (so re-baking pen paths never wipes hand-drawn strokes).
+    // (so re-baking pen paths never wipes hand-drawn strokes). Offset copies are
+    // baked into the dab. Morph only keeps the centerline and rebuilds the shells.
     function addFreePoint(frameIndex, x, y, xNorm) {
       markPadDirty();
-      // In Morph the dabs are only a live preview; the polyline is what gets kept.
-      if (morphActiveStroke) {
-        writeFreeDab(frameIndex, x, y, xNorm);
-        recordMorphPoint(x, y);
-        return;
-      }
-      const n = getKaleidoN();
+      noteOffsetPoint(x, y);
+      const nrm = offsetNormal();
+      const mod = (xNorm == null)
+        ? brushModForFrame(frameIndex)
+        : liveModsAt(xNorm);
+      const off = { copies: getOffsetCopies(), gap: getOffsetGap() * dpr * mod.gapMul };
+      const kn = morphActiveStroke ? 1 : getKaleidoN();
       const cx = canvas.width * 0.5, cy = canvas.height * 0.5;
-      forEachKaleido(x, y, cx, cy, n, (px, py) => writeFreeDab(frameIndex, px, py, xNorm));
+      const nx = nrm ? nrm.x : null;
+      const ny = nrm ? nrm.y : null;
+      const maxStep = Math.max(1, getBrushSize() * dpr * 0.12);
+      const prev = prevOffsetPose;
+      const cur = { x, y, nx, ny, gap: off.gap, xNorm, size: getBrushSize() * dpr * mod.sizeMul };
+      advanceOffset(offsetMem, prev, cur, off.copies, maxStep, (px, py, fade, t, from) => {
+        const u = t == null ? 1 : t;
+        const start = from && from.xNorm != null ? from.xNorm : (prev && prev.xNorm);
+        let n = xNorm;
+        if (start != null && u < 1) {
+          let d = xNorm - start;
+          if (d > 0.5) d -= 1;
+          else if (d < -0.5) d += 1;
+          n = start + d * u;
+          n %= 1;
+          if (n < 0) n += 1;
+        }
+        forEachKaleido(px, py, cx, cy, kn, (qx, qy) => writeFreeDab(frameIndex, qx, qy, n, fade));
+      });
+      prevOffsetPose = (nx != null) ? cur : null;
+      if (morphActiveStroke) recordMorphPoint(x, y);
     }
 
     // The recorded polyline is decimated so a pose stays light in memory while
@@ -3790,7 +4447,9 @@
           size: getBrushSize() * dpr,
           soft: parseFloat(softSlider.value),
           curve: currentCurveSnapshot(),
-          centroid: null
+          centroid: null,
+          offsetCopies: getOffsetCopies(),
+          offsetGap: getOffsetGap() * dpr
         });
       }
       rebakePen();
@@ -3914,6 +4573,7 @@
 
       targetX = currentX = lastSpatialX = e.clientX * dpr;
       targetY = currentY = lastSpatialY = e.clientY * dpr;
+      resetOffsetTrail();
       addPoint(currentX, currentY);
     });
 
@@ -3994,6 +4654,7 @@
     // Tools: Brush, Pen, Morph. penMode = pen tool active.
     let penTool = 'brush';
     let penMode = false;        // penTool !== 'brush'
+    afterCurveChange = () => { if (penMode) drawPenOverlay(); };
     let penEditing = false;     // penTool === 'edit' (adjust existing anchors only)
     let penAnchors = [];        // active path anchors, {x,y} in CSS px
     let penDragIndex = -1;
@@ -4314,6 +4975,7 @@
 
     function drawPenOverlay() {
       const ctx = penCtx;
+      ctx.globalAlpha = 1;
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       updatePenActions(); // show/hide the floating Done/Cancel control
       if (!penMode) return;
@@ -4367,18 +5029,33 @@
       if (pts.length >= 2) {
         const dense = penDensePath(pts, penClosed, penSmoothness);
         const kn = penEditing ? pathKaleidoN(penEditSettings || {}) : getKaleidoN();
+        const off = penEditing ? pathOffset(penEditSettings || {}) : { copies: getOffsetCopies(), gap: getOffsetGap() };
+        const offCurve = (penEditing && penEditSettings && penEditSettings.curve) ? penEditSettings.curve : null;
         const copies = kaleidoPolylines(dense, window.innerWidth * 0.5, window.innerHeight * 0.5, kn);
         ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        ctx.strokeStyle = col;
         for (const poly of copies) {
-          ctx.strokeStyle = col + '55'; ctx.lineWidth = size;        // brush-width band
-          ctx.beginPath();
-          poly.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-          ctx.stroke();
-          ctx.strokeStyle = col; ctx.lineWidth = 1.5;                // crisp centerline
-          ctx.beginPath();
-          poly.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-          ctx.stroke();
+          const shells = offsetPolylines(poly, off.copies, off.gap, penClosed, (k) => {
+            const x = poly.length > 1 ? k / (poly.length - 1) : 0;
+            const mul = offCurve
+              ? snapModsAt(x, offCurve).gapMul
+              : liveModsAt(x).gapMul;
+            return off.gap * mul;
+          });
+          for (const sh of shells) {
+            ctx.globalAlpha = 0.33 * sh.fade;
+            ctx.lineWidth = size;
+            ctx.beginPath();
+            sh.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+            ctx.stroke();
+            ctx.globalAlpha = sh.fade;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            sh.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+            ctx.stroke();
+          }
         }
+        ctx.globalAlpha = 1;
       }
 
       // Active anchor handles (first anchor is white = the terminal point).
@@ -4446,6 +5123,15 @@
       });
       frameNeedsUpdate[f] = true;
     }
+    function emitOffsetPoint(f, x, y, fade, rgb, size, blur, soft, alpha, kaleidoN) {
+      emitPenDab(
+        f, x, y, rgb, size,
+        blur + (1 - fade) * 1.15,
+        Math.min(1.2, soft + (1 - fade) * 0.45),
+        alpha * fade,
+        kaleidoN
+      );
+    }
     function bakePathAcrossFrames(path) {
       const activeFrames = parseInt(framesSlider.value, 10);
       const size = Math.max(2, path.size);
@@ -4454,6 +5140,24 @@
       const cs = path.curve || {};
       const spacing = Math.max(1, size * dpr * 0.15);
       const kn = pathKaleidoN(path);
+      const off = pathOffset(path);
+      const gapDev = off.gap * dpr;
+      // Join dabs ease from the previous sample's curve values. A wide offset
+      // arc is much longer than one centerline step, so a single size reads as a band.
+      const emitSpan = (from, to, x, y, fade, t) => {
+        const u = t == null ? 1 : t;
+        const a = (from && from.size > 0) ? from : to;
+        const softA = a.soft != null ? a.soft : (to.soft != null ? to.soft : path.soft);
+        const softB = to.soft != null ? to.soft : softA;
+        emitOffsetPoint(
+          to.f, x, y, fade, rgb,
+          a.size + (to.size - a.size) * u,
+          a.blur + (to.blur - a.blur) * u,
+          softA + (softB - softA) * u,
+          a.alpha + (to.alpha - a.alpha) * u,
+          kn
+        );
+      };
 
       if (pathIsAnimated(path)) {
         // MORPH: every frame holds the FULL shape at its interpolated pose, so the
@@ -4467,11 +5171,33 @@
           const K = dabs.length;
           if (K < 1) continue;
           const xnorm = activeFrames > 0 ? f / activeFrames : 0; // curve sampled at loop position
-          const m = computeModAtX(xnorm, cs.enabled, cs.param, cs.lut);
+          const m = snapModsAt(xnorm, cs);
+          const normals = (off.copies > 0 && gapDev > 0 && K >= 2) ? curveNormals(dabs, path.closed) : null;
+          let prev = null;
+          let first = null;
+          const mem = { p: [], n: [] };
+          const soft = path.soft + m.softAdd;
           for (let k = 0; k < K; k++) {
             let px = dabs[k].x, py = dabs[k].y;
             if (m.noiseAmt > 0) { px += (Math.random() - 0.5) * m.noiseAmt; py += (Math.random() - 0.5) * m.noiseAmt; }
-            emitPenDab(f, px, py, rgb, dsize * m.sizeMul, m.blurAdd, path.soft + m.softAdd, m.alphaMul, kn);
+            const pose = {
+              x: px, y: py,
+              nx: normals ? normals[k].x : null,
+              ny: normals ? normals[k].y : null,
+              gap: gapDev * m.gapMul,
+              f, size: dsize * m.sizeMul, blur: m.blurAdd, alpha: m.alphaMul,
+              soft
+            };
+            advanceOffset(mem, prev, pose, off.copies, Math.max(1, pose.size * 0.12), (x, y, fade, t, from) => {
+              emitSpan(from || prev, pose, x, y, fade, t);
+            });
+            if (!first) first = pose;
+            prev = pose;
+          }
+          if (path.closed && first && prev && prev !== first) {
+            advanceOffset(mem, prev, first, off.copies, Math.max(1, first.size * 0.12), (x, y, fade, t, from) => {
+              emitSpan(from || prev, first, x, y, fade, t);
+            }, false);
           }
         }
         return;
@@ -4483,6 +5209,10 @@
       const dabs = penResample(dense, spacing);
       const K = dabs.length;
       if (K < 1) return;
+      const normals = (off.copies > 0 && gapDev > 0 && K >= 2) ? curveNormals(dabs, path.closed) : null;
+      let prev = null;
+      let first = null;
+      const mem = { p: [], n: [] };
       for (let k = 0; k < K; k++) {
         const prog = K > 1 ? k / (K - 1) : 0;
         let f = Math.floor(prog * activeFrames);
@@ -4490,10 +5220,28 @@
         // Sample the curve at the dab's continuous position along the path (prog)
         // rather than its quantized frame, so scaling varies smoothly instead of
         // stepping at each frame boundary. (Frozen per-path in path.curve.)
-        const m = computeModAtX(prog, cs.enabled, cs.param, cs.lut);
+        const m = snapModsAt(prog, cs);
+        const dabSoft = path.soft + m.softAdd;
         let px = dabs[k].x, py = dabs[k].y;
         if (m.noiseAmt > 0) { px += (Math.random() - 0.5) * m.noiseAmt; py += (Math.random() - 0.5) * m.noiseAmt; }
-        emitPenDab(f, px, py, rgb, dsize * m.sizeMul, m.blurAdd, path.soft + m.softAdd, m.alphaMul, kn);
+        const pose = {
+          x: px, y: py,
+          nx: normals ? normals[k].x : null,
+          ny: normals ? normals[k].y : null,
+          gap: gapDev * m.gapMul,
+          f, size: dsize * m.sizeMul, blur: m.blurAdd, alpha: m.alphaMul,
+          soft: dabSoft
+        };
+        advanceOffset(mem, prev, pose, off.copies, Math.max(1, pose.size * 0.12), (x, y, fade, t, from) => {
+          emitSpan(from || prev, pose, x, y, fade, t);
+        });
+        if (!first) first = pose;
+        prev = pose;
+      }
+      if (path.closed && first && prev && prev !== first) {
+        advanceOffset(mem, prev, first, off.copies, Math.max(1, first.size * 0.12), (x, y, fade, t, from) => {
+          emitSpan(from || prev, first, x, y, fade, t);
+        }, false);
       }
     }
 
@@ -4569,7 +5317,9 @@
         size: a.size + (b.size - a.size) * t,
         soft: a.soft + (b.soft - a.soft) * t,
         alpha: 1,
-        curve: t < 0.5 ? a.curve : b.curve
+        curve: t < 0.5 ? a.curve : b.curve,
+        offsetCopies: (a.offsetCopies || 0) + ((b.offsetCopies || 0) - (a.offsetCopies || 0)) * t,
+        offsetGap: (a.offsetGap || 0) + ((b.offsetGap || 0) - (a.offsetGap || 0)) * t
       };
     }
 
@@ -4579,7 +5329,8 @@
       const c = strokeCentroid(s);
       return {
         points: s.points.map(p => ({ x: c.x + (p.x - c.x) * k, y: c.y + (p.y - c.y) * k })),
-        rgb: s.rgb, size: s.size * k, soft: s.soft, alpha: k, curve: s.curve
+        rgb: s.rgb, size: s.size * k, soft: s.soft, alpha: k, curve: s.curve,
+        offsetCopies: s.offsetCopies || 0, offsetGap: (s.offsetGap || 0) * k
       };
     }
 
@@ -4617,19 +5368,44 @@
     }
     function morphEase(t, kern) {
       let u = kernMap(t, kern);
-      if (curveEnabled && curveParam === 'morph') u = sampleCurve(u);
+      if (curveEnabled) {
+        const morphLayer = curveLayers.find(l => l.param === 'morph');
+        if (morphLayer) u = sampleLUT(morphLayer.lut, u);
+      }
       return Math.max(0, Math.min(1, u));
     }
 
     function emitStroke(f, st, activeFrames) {
       const xnorm = activeFrames > 0 ? f / activeFrames : 0;
       const cs = st.curve || {};
-      const m = computeModAtX(xnorm, cs.enabled, cs.param, cs.lut);
+      const m = snapModsAt(xnorm, cs);
       const data = morphData[f];
-      for (const p of st.points) {
-        let px = p.x, py = p.y;
+      const copies = st.offsetCopies || 0;
+      const gap = (st.offsetGap || 0) * m.gapMul;
+      const pts = st.points;
+      const normals = (copies > 0.02 && gap > 0 && pts.length >= 2) ? curveNormals(pts, false) : null;
+      const dabSize = Math.max(1, st.size * m.sizeMul);
+      let prev = null;
+      const mem = { p: [], n: [] };
+      const pushDab = (x, y, fade) => {
+        data.push(
+          x, y, st.rgb[0], st.rgb[1], st.rgb[2], dabSize,
+          m.blurAdd + (1 - fade) * 1.15,
+          Math.min(1.2, st.soft + m.softAdd + (1 - fade) * 0.45),
+          st.alpha * m.alphaMul * fade
+        );
+      };
+      for (let k = 0; k < pts.length; k++) {
+        let px = pts[k].x, py = pts[k].y;
         if (m.noiseAmt > 0) { px += (Math.random() - 0.5) * m.noiseAmt; py += (Math.random() - 0.5) * m.noiseAmt; }
-        data.push(px, py, st.rgb[0], st.rgb[1], st.rgb[2], st.size * m.sizeMul, m.blurAdd, st.soft + m.softAdd, st.alpha * m.alphaMul);
+        const cur = {
+          x: px, y: py,
+          nx: normals ? normals[k].x : null,
+          ny: normals ? normals[k].y : null,
+          gap
+        };
+        advanceOffset(mem, prev, cur, copies, dabSize * 0.12, pushDab);
+        prev = cur;
       }
       morphNeedsUpdate[f] = true;
     }
@@ -4711,7 +5487,7 @@
       editMode = true; isPlaying = false;
       updateEditModeUI(); updatePlayBtn();
       loadEditPose(currentFrame);
-      penEditSettings = { color: path.color, size: path.size, soft: path.soft, curve: path.curve, kaleido: pathKaleidoN(path) };
+      penEditSettings = { color: path.color, size: path.size, soft: path.soft, curve: path.curve, kaleido: pathKaleidoN(path), offsetCopies: pathOffset(path).copies, offsetGap: pathOffset(path).gap };
       syncSmoothSlider();
       rebakePen(); // remove it from the baked art; it now lives in the overlay
       if (typeof anchorIndex === 'number') penDragIndex = anchorIndex;
@@ -4840,6 +5616,7 @@
         curve: currentCurveSnapshot()
       };
       const kaleidoN = penEditing ? pathKaleidoN(s) : getKaleidoN();
+      const offNow = penEditing ? pathOffset(s) : { copies: getOffsetCopies(), gap: getOffsetGap() };
       let path;
       if (penEditing) {
         stashEditPose(); // fold the on-screen pose into the working base/keys
@@ -4849,6 +5626,8 @@
           color: s.color, size: s.size, soft: s.soft,
           curve: s.curve || currentCurveSnapshot(),
           kaleido: kaleidoN,
+          offsetCopies: offNow.copies,
+          offsetGap: offNow.gap,
           keys: penEditKeys.map(k => ({ frame: k.frame, anchors: k.anchors.map(a => ({ x: a.x, y: a.y })) })),
         };
       } else {
@@ -4858,6 +5637,8 @@
           color: s.color, size: s.size, soft: s.soft,
           curve: s.curve || currentCurveSnapshot(),
           kaleido: kaleidoN,
+          offsetCopies: offNow.copies,
+          offsetGap: offNow.gap,
           keys: [],
         };
       }
@@ -5082,17 +5863,28 @@
         const dx = currentX - lastSpatialX;
         const dy = currentY - lastSpatialY;
         const dist = Math.hypot(dx, dy);
-        const spacing = Math.max(1, getBrushSize() * dpr * 0.12);
         let framesElapsed = currentFrame - prevFrame;
         if (framesElapsed < 0) framesElapsed += activeFrames;
 
+        // Continuous playhead position at the START of this tick (in frames).
+        // Each dab samples the curve at its exact loop position, so scaling
+        // varies smoothly across the whole stroke instead of per frame.
+        const effSpeed = isPlaying ? speed : 0;
+        const loopStart = playheadPos - effSpeed;
+        const normOf = (tt) => {
+          const loopX = loopStart + effSpeed * tt;
+          return (((loopX % activeFrames) + activeFrames) % activeFrames) / activeFrames;
+        };
+        // Follow the size curve. Spacing from the slider alone is too coarse
+        // wherever the curve draws a smaller brush, so those stretches break into steps.
+        const brushPx = getBrushSize() * dpr;
+        const spacing = Math.max(1, Math.min(
+          brushPx * liveModsAt(normOf(0)).sizeMul,
+          brushPx * liveModsAt(normOf(1)).sizeMul
+        ) * 0.12);
+
         if (dist >= spacing || framesElapsed > 0) {
           const steps = Math.max(1, framesElapsed, Math.round(dist / spacing));
-          // Continuous playhead position at the START of this tick (in frames).
-          // Each dab samples the curve at its exact loop position, so scaling
-          // varies smoothly across the whole stroke instead of per frame.
-          const effSpeed = isPlaying ? speed : 0;
-          const loopStart = playheadPos - effSpeed;
           for (let i = 1; i <= steps; i++) {
             const t = i / steps;
             const x = lastSpatialX + dx * t;
@@ -5132,9 +5924,12 @@
       let trailLength = Math.min(rawTrailVal, activeFrames);
       // "Trail Length" curve scaling is a live render effect (it can't be baked
       // per-point), scaling the trail from 0 up to the slider length over the loop.
-      if (curveEnabled && curveParam === 'trail') {
-        const cv = sampleCurve(activeFrames > 0 ? (playheadPos / activeFrames) : 0);
-        trailLength = Math.round(cv * trailLength);
+      if (curveEnabled) {
+        const trailLayer = curveLayers.find(l => l.param === 'trail');
+        if (trailLayer) {
+          const cv = sampleLUT(trailLayer.lut, activeFrames > 0 ? (playheadPos / activeFrames) : 0);
+          trailLength = Math.round(cv * trailLength);
+        }
       }
       const maxBlur = parseFloat(blurSlider.value);
 
@@ -5204,3 +5999,32 @@
   </script>
 </body>
 </html>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
